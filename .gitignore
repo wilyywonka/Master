@@ -1,0 +1,8 @@
+# Ignore all HDF5 files
+*.h5
+
+# Ignore module files
+*.mod
+
+# Ignore object files
+*.o
