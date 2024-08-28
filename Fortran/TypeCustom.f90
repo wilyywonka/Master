@@ -37,12 +37,30 @@ module TypeModule
     implicit none
     type(ParamType), intent(inout) :: ParamAM
     type(DynamicVars), intent(inout) :: DynVarAM
-    type(InitValues), intent(in) :: InitSetup
+    type(InitValues), intent(inout) :: InitSetup
 
     ! READ NAMELIST
 
-    allocate(DynVarAM%Coords(2,ParamAM%NumPart)) ! Saved as (2,NumPart), as it is usual to need both x and y when considering lengths
-    allocate(DynVarAM%)
+    
+    ! Saved as (2,NumPart), as it is usual to need both x and y when considering lengths
+    allocate(InitSetup%NeighbourMatrix(ParamAM%MaxNeighbour, ParamAM%NumPart))
+    allocate(InitSetup%Coords(2,ParamAM%NumPart))
+    allocate(InitSetup%PolVec(2,ParamAM%NumPart))
+    allocate(InitSetup%PolAng(ParamAM%NumPart))
+
+    ! READ INITFILES
+
+    ! Saved as (2,NumPart), as it is usual to need both x and y when considering lengths
+    allocate(DynVarAM%Coords(2,ParamAM%NumPart)) 
+    allocate(DynVarAM%PolVec(2,ParamAM%NumPart))
+    allocate(DynVarAM%PolAng(ParamAM%NumPart))
+    
+    
+    DynVarAM%Coords = InitSetup%Coords
+    DynVarAM%PolVec = InitSetup%PolVec
+    DynVarAM%PolAng = InitSetup%PolAng
+
+    
     
 
 
@@ -65,7 +83,7 @@ module TypeModule
       NumNeighbours = 0
       do iNeighbour = 1,ParamAM%MaxNeighbour
         if ( InitSetup%NeighbourMatrix(iNeighbour,iParticle) /= 0 ) then
-          NumNeighbours = NumNeighbours + 1
+          NumNeighbours = NumNeighbours + 1_wpi
         end if
       end do
       allocate(Neighbours(iParticle)%SpecificNeighbours(NumNeighbours))

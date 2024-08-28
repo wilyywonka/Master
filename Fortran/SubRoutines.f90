@@ -5,16 +5,30 @@ module SubRoutineModule
   
   contains
 
-  subroutine EulerStep(ParamAM, IndexPart)
+  subroutine TimeStep(ParamAM, DynVarAM)
+    implicit none
+    type(ParamType), intent(in) :: ParamAM
+    type(DynamicVars), intent(inout) :: DynVarAM
+
+
+  end subroutine TimeStep
+
+
+  subroutine EulerStep(ParamAM, DynVarAM, IndexPart)
     implicit none
     type(ParamType), intent(inout) :: ParamAM
+    type(DynamicVars), intent(inout) :: DynVarAM
     integer(wpi), intent(in) :: IndexPart
 
     !Allocate
     integer(wpi) :: iNeighbours, Currentneighbour
-    
+    real(wpf), dimension(2) :: TotalForce
+
+    TotalForce = (0._wpf,0._wpf)
+
     do iNeighbours = 1, ParamAM%MaxNeighbour
-      Currentneighbour = ParamAM%NeighbourMatrix(IndexPart,iNeighbours)
+      
+      TotalForce = TotalForce + LinearElasticForce(ParamAM,DynVarAM,Neighbours(iNeighbours))
 
     end do
 
@@ -23,12 +37,12 @@ module SubRoutineModule
   function LinearElasticForce(ParamAM, DynVarAM, Neighbours) result(ElForce)
     implicit none
     !Input
-    type(ParamType), intent(inout) :: ParamAM
-    type(DynamicVars), intent(inout) :: DynVarAM
-    type(NeighbourType), dimension(:), intent(inout) :: Neighbours
+    type(ParamType), intent(in) :: ParamAM
+    type(DynamicVars), intent(in) :: DynVarAM
+    type(NeighbourType), dimension(:), intent(in) :: Neighbours
 
     !Output
-    real(wpf) :: ElForce
+    real(wpf), intent(out) :: ElForce
 
     
 
@@ -37,25 +51,35 @@ module SubRoutineModule
   function PolarizationForce(ParamAM) result(PolForce)
     implicit none
     !Input
-    type(ParamType), intent(inout) :: ParamAM
+    type(ParamType), intent(in) :: ParamAM
 
     !Output
-    real(wpf) :: PolForce
+    real(wpf), intent(out) :: PolForce
 
   end function 
 
   function PolarizationTorque(ParamAM) result(PolTorque)
     implicit none
     !Input
-    type(ParamType), intent(inout) ::ParamAM
+    type(ParamType), intent(in) ::ParamAM
 
     !Output
-    real(wpf) :: PolTorque
+    real(wpf), intent(out) :: PolTorque
 
 
   end function 
 
-  
+  function EucledianNormVec(Coords) result(length)
+    implicit none
+    !Input
+    real(wpf), dimension(2), intent(in) :: Coords
+
+    !Output
+    real(wpf), intent(out) :: length
+
+    length = sqrt(Coords(1)**2 + Coords(2)**2)
+
+  end function
   
 end module SubRoutineModule
 
