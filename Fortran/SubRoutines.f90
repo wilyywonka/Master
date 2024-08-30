@@ -5,79 +5,113 @@ module SubRoutineModule
   
   contains
 
-  subroutine TimeStep(ParamAM, DynVarAM)
+  subroutine TimeStep(ParamAM, DynVarAM, Neighbours)
     implicit none
+    !Input
     type(ParamType), intent(in) :: ParamAM
     type(DynamicVars), intent(inout) :: DynVarAM
+    type(NeighbourType), dimension(:), intent(in) :: Neighbours
+    
+    !Allocate
+    integer(wpi) :: iParticle
+
+    do iParticle = 1,ParamAM%NumPart
+      call EulerStep(ParamAM, DynVarAM, Neighbours, iParticle)
+    end do
 
 
   end subroutine TimeStep
 
 
-  subroutine EulerStep(ParamAM, DynVarAM, IndexPart)
+  subroutine EulerStep(ParamAM, DynVarAM, Neighbours, iParticle)
     implicit none
-    type(ParamType), intent(inout) :: ParamAM
+    !Input
+    type(ParamType), intent(in) :: ParamAM
     type(DynamicVars), intent(inout) :: DynVarAM
-    integer(wpi), intent(in) :: IndexPart
-
+    type(NeighbourType), dimension(:), intent(in) :: Neighbours
+    integer(wpi), intent(in) :: iParticle
+    
     !Allocate
-    integer(wpi) :: iNeighbours, Currentneighbour
-    real(wpf), dimension(2) :: TotalForce
+    integer(wpi) :: iNeighbour
+    real(wpf), dimension(2) :: TotalForce, PolVec
+    real(wpf) :: TotalTorque
 
-    TotalForce = (0._wpf,0._wpf)
+    TotalForce = (/0._wpf,0._wpf/)
+    PolVec = (/cos(DynVarAM%PolAng(iParticle,DynVarAM%OldIndex)),sin(DynVarAM%PolAng(iParticle,DynVarAM%OldIndex))/)
+    TotalTorque = 0_wpf
 
-    do iNeighbours = 1, ParamAM%MaxNeighbour
+    do iNeighbour = 1, Neighbours(iParticle)%NumNeighbours
       
-      TotalForce = TotalForce + LinearElasticForce(ParamAM,DynVarAM,Neighbours(iNeighbours))
+      !Adding all elastic contributions
+      TotalForce = TotalForce + LinearElasticForce(ParamAM,DynVarAM,iParticle,Neighbours(iParticle),iNeighbour)
+
 
     end do
 
+    !Calculating the torque using the TotalForce, as it per now only contains elastic force, and is thus the total elastic force
+    TotalTorque = TotalTorque + PolarizationTorque(ParamAM,TotalForce,PolVec)
+
+    !Adding on the polarization force, to the elastic energy to produce the total force and dividing by zeta to pruce the "velocity"
+    TotalForce = (TotalForce + PolarizationForce(ParamAM,PolVec))/ParamAM%zeta
+
+    !setting the new timestep using the previous, with an added velocity-Euler-step
+    DynVarAM%Coords(:,iParticle,DynVarAM%NewIndex) = DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) + TotalForce*ParamAM%deltaT
+    DynVarAM%PolAng(iParticle,DynVarAM%NewIndex) = DynVarAM%PolAng(iParticle,DynVarAM%OldIndex) + TotalTorque*ParamAM%deltaT
+
+
+
   end subroutine EulerStep
 
-  function LinearElasticForce(ParamAM, DynVarAM, Neighbours) result(ElForce)
+  function LinearElasticForce(ParamAM, DynVarAM, iPart, Neighbour, iNeigh) result(ElForce)
     implicit none
     !Input
     type(ParamType), intent(in) :: ParamAM
     type(DynamicVars), intent(in) :: DynVarAM
-    type(NeighbourType), dimension(:), intent(in) :: Neighbours
-
+    integer(wpi), intent(in) :: iPart, iNeigh
+    type(NeighbourType), intent(in) :: Neighbour
+    !Allocate
+    real(wpf), dimension(2) :: DeltaCoords
+    real(wpf) :: length
     !Output
-    real(wpf), intent(out) :: ElForce
+    real(wpf), dimension(2) :: ElForce
 
-    
+    !Calculating the difference in coordinates between the particle and the neighbour
+    DeltaCoords = DynVarAM%Coords(:,iPart,DynVarAM%OldIndex) &
+    - DynVarAM%Coords(:,Neighbour%SpecificNeighbours(iNeigh),DynVarAM%OldIndex)
+
+    !Calculating the length
+    length = EucledianNormVec(DeltaCoords)
+
+    !Force is calculated as -k(l-l_0)\vec(d), where d is in the direction of the displacement, as a unitary vector
+    Elforce = -ParamAM%k*(length-Neighbour%EquilLength(iNeigh))*DeltaCoords/length
 
   end function
   
-  function PolarizationForce(ParamAM) result(PolForce)
+  function PolarizationForce(ParamAM, PolVec) result(PolForce)
     implicit none
     !Input
     type(ParamType), intent(in) :: ParamAM
-
+    real(wpf), dimension(2), intent(in) :: PolVec
     !Output
-    real(wpf), intent(out) :: PolForce
+    real(wpf), dimension(2) :: PolForce
+
+    PolForce = ParamAM%Fa*PolVec
 
   end function 
 
-  function PolarizationTorque(ParamAM) result(PolTorque)
+  function PolarizationTorque(ParamAM,ElasticForce,PolVec) result(PolTorque)
     implicit none
     !Input
-    type(ParamType), intent(in) ::ParamAM
-
+    type(ParamType), intent(in) :: ParamAM
+    real(wpf), dimension(2), intent(in) :: ElasticForce, PolVec
+    !Allocate
+    real(wpf), dimension(2) :: NormPolVec
     !Output
-    real(wpf), intent(out) :: PolTorque
+    real(wpf) :: PolTorque
 
+    NormPolVec = (/-PolVec(2),PolVec(1)/)
 
-  end function 
-
-  function EucledianNormVec(Coords) result(length)
-    implicit none
-    !Input
-    real(wpf), dimension(2), intent(in) :: Coords
-
-    !Output
-    real(wpf), intent(out) :: length
-
-    length = sqrt(Coords(1)**2 + Coords(2)**2)
+    PolTorque = ParamAM%xi * dot_product(ElasticForce,NormPolVec)
 
   end function
   

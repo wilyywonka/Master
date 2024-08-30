@@ -12,14 +12,17 @@ module TypeModule
 
   type :: DynamicVars
 
-    real(wpf), dimension(:,:), allocatable :: Coords, PolVec
-    real(wpf), dimension(:), allocatable :: PolAng
+    real(wpf), dimension(:,:,:), allocatable :: Coords, PolVec
+    real(wpf), dimension(:,:), allocatable :: PolAng
+    integer(wpi) :: NewIndex, OldIndex
 
   end type DynamicVars
 
   type :: NeighbourType
 
     integer(wpi), dimension(:), allocatable :: SpecificNeighbours
+    real(wpf), dimension(:), allocatable :: EquilLength
+    integer(wpi) :: NumNeighbours
 
   end type NeighbourType
 
@@ -33,6 +36,18 @@ module TypeModule
 
   contains
 
+  function EucledianNormVec(Coords) result(length)
+    implicit none
+    !Input
+    real(wpf), dimension(2), intent(in) :: Coords
+
+    !Output
+    real(wpf) :: length
+
+    length = sqrt(Coords(1)**2 + Coords(2)**2)
+
+  end function
+
   subroutine Initialize(ParamAM, DynVarAM, InitSetup)
     implicit none
     type(ParamType), intent(inout) :: ParamAM
@@ -40,6 +55,9 @@ module TypeModule
     type(InitValues), intent(inout) :: InitSetup
 
     ! READ NAMELIST
+
+    DynVarAM%OldIndex = 1_wpi
+    DynVarAM%NewIndex = 2_wpi
 
     
     ! Saved as (2,NumPart), as it is usual to need both x and y when considering lengths
@@ -50,19 +68,15 @@ module TypeModule
 
     ! READ INITFILES
 
-    ! Saved as (2,NumPart), as it is usual to need both x and y when considering lengths
-    allocate(DynVarAM%Coords(2,ParamAM%NumPart)) 
-    allocate(DynVarAM%PolVec(2,ParamAM%NumPart))
-    allocate(DynVarAM%PolAng(ParamAM%NumPart))
+    ! Saved as (2,NumPart,2) = (x/y,iPart,new/old), as it is usual to need both x and y when considering lengths
+    allocate(DynVarAM%Coords(2,ParamAM%NumPart,2)) 
+    allocate(DynVarAM%PolVec(2,ParamAM%NumPart,2))
+    allocate(DynVarAM%PolAng(ParamAM%NumPart,2))
     
     
-    DynVarAM%Coords = InitSetup%Coords
-    DynVarAM%PolVec = InitSetup%PolVec
-    DynVarAM%PolAng = InitSetup%PolAng
-
-    
-    
-
+    DynVarAM%Coords(:,:,DynVarAM%OldIndex) = InitSetup%Coords
+    DynVarAM%PolVec(:,:,DynVarAM%OldIndex) = InitSetup%PolVec
+    DynVarAM%PolAng(:,DynVarAM%OldIndex) = InitSetup%PolAng
 
     
   end subroutine Initialize
@@ -75,24 +89,30 @@ module TypeModule
     
 
     !Allocate
-    integer(wpi) :: iParticle, iNeighbour, NumNeighbours
+    integer(wpi) :: iParticle, iNeighbour, SpecNumNeighbours
 
     allocate(Neighbours(ParamAM%NumPart))
 
     do iParticle = 1,ParamAM%NumPart
-      NumNeighbours = 0
+      SpecNumNeighbours = 0
       do iNeighbour = 1,ParamAM%MaxNeighbour
         if ( InitSetup%NeighbourMatrix(iNeighbour,iParticle) /= 0 ) then
-          NumNeighbours = NumNeighbours + 1_wpi
+          SpecNumNeighbours = SpecNumNeighbours + 1_wpi
         end if
       end do
-      allocate(Neighbours(iParticle)%SpecificNeighbours(NumNeighbours))
-      do iNeighbour = 1, NumNeighbours
+      Neighbours(iParticle)%NumNeighbours = SpecNumNeighbours
+      allocate(Neighbours(iParticle)%SpecificNeighbours(SpecNumNeighbours))
+      allocate(Neighbours(iParticle)%EquilLength(SpecNumNeighbours))
+      do iNeighbour = 1, SpecNumNeighbours
         Neighbours(iParticle)%SpecificNeighbours(iNeighbour) = InitSetup%NeighbourMatrix(iNeighbour,iParticle)
+        Neighbours(iParticle)%EquilLength(iNeighbour) = EucledianNormVec(InitSetup%Coords(:,iParticle) &
+        - InitSetup%Coords(:,iNeighbour))
       end do
     end do
 
   end subroutine InitializeNeighbours
+
+  
 
 
 end module TypeModule

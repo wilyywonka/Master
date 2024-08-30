@@ -1,7 +1,7 @@
 module PrecMod
 
   ! Module that helps with global declaration of precision
-  ! Most of this module is taken from Ingve Simonsen, who again modelled it after Numerical Recipes nrtype
+  ! Most of this module is taken from Ingve Simonsen, who again modelled it after the Numerical Recipes nrtype
 
   implicit none
   
