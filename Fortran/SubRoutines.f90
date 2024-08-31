@@ -15,10 +15,10 @@ module SubRoutineModule
     !Allocate
     integer(wpi) :: iParticle
 
+    !Loop over particles, this loop has been deliberately made to be very easy to parallelize
     do iParticle = 1,ParamAM%NumPart
       call EulerStep(ParamAM, DynVarAM, Neighbours, iParticle)
     end do
-
 
   end subroutine TimeStep
 
@@ -54,7 +54,9 @@ module SubRoutineModule
     !Adding on the polarization force, to the elastic energy to produce the total force and dividing by zeta to pruce the "velocity"
     TotalForce = (TotalForce + PolarizationForce(ParamAM,PolVec))/ParamAM%zeta
 
-    !setting the new timestep using the previous, with an added velocity-Euler-step
+    !TODO: Setting some kind of boundary thing.
+
+    !Setting the new timestep using the previous, with an added velocity-Euler-step
     DynVarAM%Coords(:,iParticle,DynVarAM%NewIndex) = DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) + TotalForce*ParamAM%deltaT
     DynVarAM%PolAng(iParticle,DynVarAM%NewIndex) = DynVarAM%PolAng(iParticle,DynVarAM%OldIndex) + TotalTorque*ParamAM%deltaT
 
@@ -80,7 +82,7 @@ module SubRoutineModule
     - DynVarAM%Coords(:,Neighbour%SpecificNeighbours(iNeigh),DynVarAM%OldIndex)
 
     !Calculating the length
-    length = EucledianNormVec(DeltaCoords)
+    length = EuclideanNormVec(DeltaCoords)
 
     !Force is calculated as -k(l-l_0)\vec(d), where d is in the direction of the displacement, as a unitary vector
     Elforce = -ParamAM%k*(length-Neighbour%EquilLength(iNeigh))*DeltaCoords/length
@@ -114,6 +116,19 @@ module SubRoutineModule
     PolTorque = ParamAM%xi * dot_product(ElasticForce,NormPolVec)
 
   end function
+
+  subroutine SwitchIndex(DynVarAM)
+    implicit none
+    !Input/Output
+    type(DynamicVars), intent(inout) :: DynVarAM
+
+    !Switching, or flip-floping, such that the index that previously was 1 becomes 2, while 2 becomes 1
+    !The new index becomes the old index - to be read in the next timestep, and old becomes new index - to we written over
+    DynVarAM%OldIndex = 3_wpi - DynVarAM%OldIndex
+    DynVarAM%NewIndex = 3_wpi - DynVarAM%NewIndex
+
+  end subroutine SwitchIndex
+
   
 end module SubRoutineModule
 

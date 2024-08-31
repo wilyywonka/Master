@@ -1,0 +1,12 @@
+&Parameters
+    NumPart = 30
+    NumTimeSteps = 100
+    MaxNeighbour = 5
+    k = 0.1
+    xi = 1.0
+    zeta = 1.0
+    Fa = 1.0
+    deltaT = 0.1
+    InitFileName = "InitState.h5"
+    InitNeighbour = "InitNeighbour.h5"
+/
