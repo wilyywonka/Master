@@ -9,17 +9,18 @@ program ActiveSolidProgram
   type(DynamicVars) :: DynVarAM
   type(InitValues) :: InitSetup
   type(NeighbourType), dimension(:), allocatable :: Neighbours
-  integer(wpi) :: iTimeStep
   character (len = :), allocatable :: ParameterFileName
+  integer(wpi) :: iTimeStep
 
   ParameterFileName = "Parameters.nml"
 
   !Initialize coordinates, and polarity direction
-  call Initialize(ParamAM, DynVarAM, InitSetup)
+  call Initialize(ParameterFileName, ParamAM, DynVarAM, InitSetup)
 
   !Initialize neighbour type
   call InitializeNeighbours(ParamAM,InitSetup,Neighbours)
 
+  !The initialization is now done, and the InitSetup can be deallocated
   call DeallocateInit(InitSetup)
 
   !Starting the timestep loop

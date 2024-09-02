@@ -8,6 +8,8 @@ module TypeModule
 
     real(wpf) :: zeta, xi, Fa, k, deltaT
 
+    character(len = :), allocatable :: SaveFileName
+
   end type ParamType
 
   type :: DynamicVars
@@ -54,24 +56,24 @@ module TypeModule
 
   end function
 
-  subroutine Initialize(ParamAM, DynVarAM, InitSetup)
+  subroutine Initialize(ParameterFileName,ParamAM, DynVarAM, InitSetup)
     implicit none
+    character(len = *), intent(in) :: ParameterFileName
     type(ParamType), intent(inout) :: ParamAM
     type(DynamicVars), intent(inout) :: DynVarAM
     type(InitValues), intent(inout) :: InitSetup
 
-    ! READ NAMELIST
+    call ReadNamelist(ParameterFileName, ParamAM, InitSetup)
 
     DynVarAM%OldIndex = 1_wpi
     DynVarAM%NewIndex = 2_wpi
 
-    
     ! Saved as (2,NumPart), as it is usual to need both x and y when considering lengths
     allocate(InitSetup%NeighbourMatrix(ParamAM%MaxNeighbour, ParamAM%NumPart))
     allocate(InitSetup%Coords(2,ParamAM%NumPart))
     allocate(InitSetup%PolAng(ParamAM%NumPart))
 
-    ! READ INITFILES
+    call ReadHDF5(InitSetup)
 
     ! Saved as (2,NumPart,2) = (x/y,iPart,new/old), as it is usual to need both x and y when considering lengths
     allocate(DynVarAM%Coords(2,ParamAM%NumPart,2)) 
@@ -116,6 +118,7 @@ module TypeModule
   end subroutine InitializeNeighbours
 
   subroutine DeallocateInit(InitSetup)
+    implicit none
     !Input
     type(InitValues), intent(inout) :: InitSetup
 
@@ -136,11 +139,11 @@ module TypeModule
     ! Allocate
     integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps
     real(wpf) :: zeta, xi, Fa, k, deltaT
-    character(len=100) :: InitFileName, InitNeighbour
+    character(len=100) :: InitFileName, InitNeighbour, SaveFileName
     integer(wpi) :: fu, rc
   
     ! Namelist definition.
-    namelist /Parameters/ NumPart, MaxNeighbour, NumTimeSteps, zeta, xi, Fa, k, deltaT, InitFileName, InitNeighbour
+    namelist /Parameters/ NumPart, MaxNeighbour, NumTimeSteps, zeta, xi, Fa, k, deltaT, InitFileName, InitNeighbour, SaveFileName
   
     ! Open and read Namelist file.
     ! We have decided to not do error handling, as all parameters are printed in the end.
@@ -162,6 +165,7 @@ module TypeModule
     ParamAM%Fa = Fa
     ParamAM%k = k
     ParamAM%deltaT = deltaT
+    ParamAM%SaveFileName = trim(SaveFileName)
 
     ! Print parameters
     write(*,"(a)") "----------------------------------------------------------------------"
@@ -176,9 +180,69 @@ module TypeModule
     write(*,"(a,g0)") "DeltaT:- - - - - - - - - - - - - - - - - - ", deltaT
     write(*,"(a,g0)") "Filename of initial system configuration:- ", InitSetup%InitSetupFileName
     write(*,"(a,g0)") "Filename of neighbour matrix:- - - - - - - ", InitSetup%NeighbourMatrixFileName
+    write(*,"(a,g0)") "Filename of savefile:- - - - - - - - - - - ", ParamAM%SaveFileName
     write(*,"(a)") "----------------------------------------------------------------------"
     
   end subroutine ReadNamelist
+
+  subroutine ReadHDF5(InitSetup)
+    implicit none
+    ! Input
+    type(InitValues) :: InitSetup
+
+  end subroutine ReadHDF5
+
+  subroutine WriteHDF5(ParamAM, DynVarAM, fileName, xLabel, yLabel)
+    use hdf5
+    implicit none
+    
+    ! Input
+    real(wpf),, intent(in) :: xarray, yarray
+    character(len=*), intent(in)     :: fileName, xLabel, yLabel
+    ! Allocate
+    integer(4)                       :: error
+    integer                          :: space_rank
+    integer(HSIZE_T)                 :: data_dims(1)
+    integer(HID_T)                   :: file_id, dspace_id, dset_id1, dset_id2, dset_id3, dset_id4
+  
+    !Interface
+    call h5open_f(error)
+    !Open file
+    call h5fcreate_f(fileName,H5F_ACC_TRUNC_F,file_id,error)
+  
+    !Set sizes
+    space_rank = 1
+    data_dims(1) = N
+  
+    !Open dataspace
+    call h5screate_simple_f(space_rank,data_dims,dspace_id,error)
+  
+  
+    !Create dataset
+    call h5dcreate_f(file_id,xLabel,H5T_NATIVE_DOUBLE,dspace_id,dset_id1,error)
+    call h5dcreate_f(file_id,yLabel,H5T_NATIVE_DOUBLE,dspace_id,dset_id2,error)
+  
+  
+    !Write dataset
+    call h5dwrite_f(dset_id1,H5T_NATIVE_DOUBLE,xarray,data_dims,error)
+    call h5dwrite_f(dset_id2,H5T_NATIVE_DOUBLE,yarray,data_dims,error)
+  
+  
+    !Close dataset
+    call h5dclose_f(dset_id1,error)
+    call h5dclose_f(dset_id2,error)
+  
+  
+    !Close dataspace
+    call h5sclose_f(dspace_id,error)
+  
+    !Close file
+    call h5fclose_f(file_id,error)
+    !Close interface
+    call h5close_f(error)
+  end subroutine WriteHDF5
+
+  
 
 
 end module TypeModule

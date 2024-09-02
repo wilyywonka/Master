@@ -56,6 +56,10 @@ module SubRoutineModule
 
     !TODO: Setting some kind of boundary thing.
 
+    ! TODO FIX SO IT IS REAL EULER!
+    ! CALC FORCE/VEL, SAVE and use prev vel for new pos
+
+
     !Setting the new timestep using the previous, with an added velocity-Euler-step
     DynVarAM%Coords(:,iParticle,DynVarAM%NewIndex) = DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) + TotalForce*ParamAM%deltaT
     DynVarAM%PolAng(iParticle,DynVarAM%NewIndex) = DynVarAM%PolAng(iParticle,DynVarAM%OldIndex) + TotalTorque*ParamAM%deltaT

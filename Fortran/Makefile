@@ -5,39 +5,46 @@ FDEBUG=-g -Wall -Wextra -fcheck=all -fbacktrace
 FOPTIM=-O3
 
 
-APP=Rayleigh
-SRC=$(APP).f90
+MAINPRG=Program
+MAINSRC=$(MAINPRG).f90
 
-MODULEAPP=ParamsFile
-MODULESRC=$(MODULEAPP).f90
+PRECPRG=PrecisionMod
+PRECSRC=$(PRECPRG).f90
 
+TYPEPRG=TypeCustom
+TYPESRC=$(TYPEPRG).f90
+
+SUBPRG=SubRoutines
+SUBSRC=$(SUBPRG).f90
 
 FFLAGSDEBUG+=$(FDEBUG)
 FFLAGS+=$(FOPTIM)
 
 LIB=usr/lib/x86_64-linux-gnu/hdf5/serial
 LIB2=usr/local/lib
-LIB3=usr/lib/x86_64-linux-gnu/lapack
 INC1=usr/include/hdf5/serial
 INC2=usr/local/include
-INC3=home/wilhelm/Desktop/lapack-3.11.0/SRC
+INCLOCAL=./
 
 
-#%.o: %.f90
-#	$(FC) $(FFLAGS) -o $@ -I/$(INC) -c $<
 
 build: $(OBJ)
-	$(FC) $(FFLAGS) -I/$(INC1) -I/$(INC2) -L/$(LIB) -L/$(LIB2) -L/$(LIB3) -c $(MODULESRC) -lhdf5 -lhdf5_fortran -lfftw3 -fopenmp -llapack -lblas
-	$(FC) $(FFLAGS) -I/$(INC1) -I/$(INC2) -L/$(LIB) -L/$(LIB2) -L/$(LIB3) -o $(APP) $(SRC) $(MODULEAPP).o -lhdf5 -lhdf5_fortran -lfftw3 -fopenmp -llapack -lblas
+	$(FC) $(FFLAGS) -I/$(INC1) -I/$(INC2) -L/$(LIB) -L/$(LIB2) -L/$(LIB3) -c -o $(PRECPRG).o $(PRECSRC) -lhdf5 -lhdf5_fortran -fopenmp
+	$(FC) $(FFLAGS) -I/$(INC1) -I/$(INC2) -I/$(INCLOCAL) -L/$(LIB) -L/$(LIB2) -L/$(LIB3) -o $(TYPEPRG).o $(TYPESRC) $(PRECPRG).o -lhdf5 -lhdf5_fortran -fopenmp
+#	$(FC) $(FFLAGS) -I/$(INC1) -I/$(INC2) -L/$(LIB) -L/$(LIB2) -L/$(LIB3) -c $(SUBSRC) $(PRECPRG).o $(TYPEPRG).o -lhdf5 -lhdf5_fortran -fopenmp
+#	$(FC) $(FFLAGS) -I/$(INC1) -I/$(INC2) -L/$(LIB) -L/$(LIB2) -L/$(LIB3) -o $(MAINPRG) $(MAINSRC) $(SUBPRG).o $(PRECPRG).o $(TYPEPRG).o -lhdf5 -lhdf5_fortran -fopenmp
+
+#optim: $(OBJ)
+
 
 #debug: $(OBJ)
 #	$(FC) $(FFLAGSDEBUG) -I/$(INC1) -I/$(INC2) -L/$(LIB) -L/$(LIB2) -o $(APP) $(SRC) -lhdf5 -lhdf5_fortran -lfftw3 -fopenmp -llapack -lblas
 
 run:
-	make build; ./$(APP)
+	make build; ./$(MAINPRG)
 
 debugrun:
-	make debug; ./$(APP)
+	make debug; ./$(MAINPRG)
 
 cleanrun:
 	make cleanall; make run
@@ -45,14 +52,6 @@ cleanrun:
 clean:
 	rm -rf $(OBJ)
 	rm -rf *.mod
-	rm -rf $(APP).x
+	rm -rf $(MAINPRG).x
 	rm -rf *.o
-	rm -rf ./$(APP)
-
-cleanall:
-	rm -rf $(OBJ)
-	rm -rf *.mod
-	rm -rf $(APP).x
-	rm -rf *.o
-	rm -rf ./$(APP)
-	rm -rf *.h5
+	rm -rf ./$(MAINPRG)
