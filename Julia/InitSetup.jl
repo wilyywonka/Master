@@ -1,136 +1,177 @@
 using Plots
 using HDF5
 
-function DefGrid(Configuration, R, NPart, SmallRad,length,NumBase,nullpoint,Center)
-    CoordArray = zeros(2,NPart)
-    if Configuration=="RandomRS"
-        NumPlaced = 0
-        while NumPlaced < NPart
-            coord = (rand(2).-0.5).*2*R.+Center
-    
-            if (coord[1]-Center[1])^2 + (coord[2]-Center[2])^2 < R^2
-                CoordArray[:,NumPlaced+1] = coord
-                NumPlaced += 1
-            end
-        end
-    end
-
-    if Configuration=="RandomRS_Vicinity"
-        ErrorSet = 0
-        success = false
-        while true
-            CoordArray = zeros(2,NPart)
-            NumPlaced = 0
-            ErrorTries = 0
-            while NumPlaced < NPart
-                coord = (rand(2).-0.5).*2*R.+Center
-                if (coord[1]-Center[1])^2 + (coord[2]-Center[2])^2 < R^2
-                    if NumPlaced > 0
-                        DiffArray = CoordArray[:,1:NumPlaced].-coord
-                        DiffLengths = DiffArray[1,:].^2 .+ DiffArray[2,:].^2
-                        if all(DiffLengths.>SmallRad^2)
-                            CoordArray[:,NumPlaced+1] = coord
-                            NumPlaced += 1
-                            ErrorTries = 0
-                        else
-                            ErrorTries += 1
-                        end   
-                    else
-                        CoordArray[:,NumPlaced+1] = coord
-                        NumPlaced += 1
-                        ErrorTries = 0     
-                    end
-                end
-                if ErrorTries > 1000
-                    ErrorSet += 1
-                    break
-                end
-                if NumPlaced == NPart
-                    success = true
-                    break
-                end 
-            end
-            if success
-                break
-            end
-            if ErrorSet > 100
-                error("Too many tries, try again")
-            end
-        end
-    end
-    
-    if Configuration=="HexagonalGrid"
-        BaseIndex = 1
-        Layer = 1
-        angle = pi*60/180
-        CoordArray[:,1] = [nullpoint,nullpoint]
-        for i in 2:NPart
-            if BaseIndex >= NumBase
-                if Layer%2 == 1
-                    CoordArray[:,i] = CoordArray[:,i-1] + length.*[cos(angle),sin(angle)]
-                else
-                    CoordArray[:,i] = CoordArray[:,i-1] + length.*[cos(2*angle),sin(2*angle)]
-                end
-                Layer = 3 - Layer
-                BaseIndex = 1
-            else
-                CoordArray[:,i] = CoordArray[:,i-1] - (Layer-1.5)*2*[length,0]
-                BaseIndex += 1
-            end
-        end
-    end
-    return CoordArray    
+function InitCoords(NPart,R)
+    randAngle = rand(NPart)*2*pi
+    randRadius = sqrt.(rand(NPart)*(R^2))
+    Coords = zeros(2,NPart)
+    Coords[1,:] = cos.(randAngle).*randRadius
+    Coords[2,:] = sin.(randAngle).*randRadius
+    return Coords
 end
 
-function FindNeighbours(NeighbouringType,CoordArray,NeighbourRad,NPart)
-    if NeighbouringType == "Radius"
-        IndexVec = 1:NPart
-        NumNeighbours = zeros(Int64,NPart)
-        for i in 1:NPart
-            NumNeighbours[i] = length(findall((CoordArray[1,:][1:end .!= i].-CoordArray[1,i]).^2 + (CoordArray[2,:][1:end .!= i].-CoordArray[2,i]).^2 .< NeighbourRad^2))
-        end
-        if minimum(NumNeighbours) <= 1
-            error("Paricle(s) present with no neighbours")
-        end
-        NeighbourMatrix = zeros(Int64,maximum(NumNeighbours),NPart)
-        for i in 1:NPart
-            if NumNeighbours[i] > 0
-                NeighbourMatrix[1:NumNeighbours[i],i] = IndexVec[1:end .!= i][findall((CoordArray[1,1:end .!= i].-CoordArray[1,i]).^2 .+ (CoordArray[2,1:end .!= i].-CoordArray[2,i]).^2 .< NeighbourRad^2)]
+function InitializeSystem(NPart,ρ,spread,finalMeanRad,growSize,RandDist,NTimeSteps,Extrasteps,A,dt, saveEvery,save=false)
+
+    R = sqrt((NPart*(finalMeanRad)^2)/(ρ))
+
+    if RandDist == "Uniform"
+        radArray = rand(NPart).*(spread[2]-spread[1]) .+ spread[1] .- growSize
+    end
+
+    iNew = 2
+    iOld = 1
+
+
+    CoordArray= zeros(2,NPart,2)
+    CoordArray[:,:,iOld] = InitCoords(NPart,R)
+
+    if save
+        SaveRadArray = zeros(NPart,floor(Int,(NTimeSteps+Extrasteps)/saveEvery)+1)
+        SaveCoordArray = zeros(2,NPart,floor(Int,(NTimeSteps+Extrasteps)/saveEvery)+1)
+
+        SaveRadArray[:,1] = radArray
+        SaveCoordArray[:,:,1] = CoordArray[:,:,iOld]
+
+        saveCounter = 2
+    end
+
+    IndexVec = 1:NPart
+    IncrementRadIncrease = (growSize)/NTimeSteps
+
+
+    for iTimeStep in 1:(NTimeSteps + Extrasteps)
+        #Parallel
+        Threads.@threads for iParticle in 1:NPart
+            CloseParticles = IndexVec[1:end .!= iParticle][findall((CoordArray[1,1:end .!= iParticle,iOld].-CoordArray[1,iParticle,iOld]).^2 .+ (CoordArray[2,1:end .!= iParticle,iOld].-CoordArray[2,iParticle,iOld]).^2 .< (radArray[1:end .!= iParticle].+radArray[iParticle]).^2)]
+            forceVec = zeros(2)
+            for iNeighbours in CloseParticles
+                DeltaVec = CoordArray[:,iParticle,iOld] - CoordArray[:,iNeighbours,iOld]
+                forceVec += abs(radArray[iParticle] + radArray[iNeighbours] - sqrt(DeltaVec[1]^2 + DeltaVec[2]^2))^(3/2) .* DeltaVec./sqrt(DeltaVec[1]^2 + DeltaVec[2]^2)
             end
+            radCenter = sqrt(CoordArray[1,iParticle,iOld]^2 + CoordArray[2,iParticle,iOld]^2)
+            if radCenter > R - radArray[iParticle]
+                V = A*(radCenter-(R-radArray[iParticle]))
+                forceVec += -(V/radCenter).*[CoordArray[1,iParticle,iOld],CoordArray[2,iParticle,iOld]]
+            end
+            CoordArray[:,iParticle,iNew] = CoordArray[:,iParticle,iOld] + forceVec*A*dt
+        end
+        if iTimeStep <= NTimeSteps
+            radArray .+= IncrementRadIncrease
+        end
+        iOld = 3 - iOld
+        iNew = 3 - iNew
+        if save && iTimeStep%saveEvery == 0
+            SaveRadArray[:,saveCounter] = radArray
+            SaveCoordArray[:,:,saveCounter] = CoordArray[:,:,iOld]
+            saveCounter += 1
         end
     end
-    return NeighbourMatrix
+    if save
+        return SaveCoordArray, SaveRadArray, R
+    else
+        return CoordArray[:,:,iNew], radArray[:,:,iNew], R[:,iNew]
+    end
 end
 
-R = 6
-CircR = 20
-Center = [2,3]
 
-NPart = 200
-SmallRad = 0.637
-Length = 0.3
-NumBase = 50
-NullPoint = -2*R/3
-# Possibilities RandomRS, RandomRS_Vicinity, HexagonalGrid
-Configuration = "RandomRS_Vicinity"
+NPart = 500
+ρ = 0.90
+spread = [0.85,1.15]
+finalMeanRad = 1
+growSize = 0.3
+RandDist = "Uniform"
+NTimeSteps = 20000
+Extrasteps = 30000
+A = 1
+dt = 0.02
+saveEvery = 1
 
-CoordArray = DefGrid(Configuration, R, NPart, SmallRad, Length, NumBase, NullPoint,Center)
+SaveCoordArray, SaveRadArray, R = InitializeSystem(NPart,ρ,spread,finalMeanRad,growSize,RandDist,NTimeSteps,Extrasteps,A,dt,saveEvery,true)
 
-NeighbourMatrix = FindNeighbours("Radius",CoordArray,SmallRad+0.5,NPart)
 
-println(size(NeighbourMatrix))
 
+
+
+# Plot
 CircleArray = zeros(2,100)
 PhiCirc = LinRange(0,2*pi,100)
-CircleArray[1,:] = CircR*cos.(PhiCirc)
-CircleArray[2,:] = CircR*sin.(PhiCirc)
+CircleArray[1,:] = R*cos.(PhiCirc)
+CircleArray[2,:] = R*sin.(PhiCirc)
 
 
-j = 24
-
-plot(CircleArray[1,:],CircleArray[2,:],size=(800,800))
-scatter!(CoordArray[1,:],CoordArray[2,:])
-scatter!([CoordArray[1,j]],[CoordArray[2,j]],c="red")
-scatter!(CoordArray[1,NeighbourMatrix[:,j][findall(NeighbourMatrix[:,j] .!= 0)]],CoordArray[2,NeighbourMatrix[:,j][findall(NeighbourMatrix[:,j] .!= 0)]],c="green")
+function circle(x, y, r=1; n=30)
+    θ = 0:360÷n:360
+    Plots.Shape(r*sind.(θ) .+ x, r*cosd.(θ) .+ y)
+end
 
 
+
+i = 1#length(SaveRadArray[1,:])
+for j in 1:floor(Int,(NTimeSteps+Extrasteps)/100)
+    println(i)
+    circles = circle.(SaveCoordArray[1,:,i],SaveCoordArray[2,:,i],SaveRadArray[:,i])
+
+
+    plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
+        color=:black, grid=false)
+
+
+    aPlot =  plot(circles; plot_kwargs...)
+    plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
+    display(aPlot)
+    i += 100
+end
+
+using Delaunay
+using GLMakie
+size(transpose(SaveCoordArray[:,:,end]))
+
+points = zeros(size(transpose(SaveCoordArray[:,:,end])))
+
+#points = rand(10,2)
+
+for i in 1:2
+    for j in 1:500
+        points[j,i] = transpose(SaveCoordArray[:,:,end])[j,i]
+    end
+end
+
+mesh = delaunay(points)
+
+color = rand(size(mesh.points, 1))
+fig, ax, pl = Makie.poly(mesh.points, mesh.simplices, color=color, strokewidth=2, figure=(resolution=(800, 400),))
+display(fig)
+#save("delaunay2d.png", fig) 
+
+IndexList = 1:500
+
+IndexList[mesh.vertex_neighbor_vertices[1,:]]
+
+
+i = 1
+circles = circle.(SaveCoordArray[1,i,end],SaveCoordArray[2,i,end],SaveRadArray[i,end])
+
+
+plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
+    color=:black, grid=false)
+
+
+aPlot =  plot(circles; plot_kwargs...)
+plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line=false,
+    color=:black, grid=false)
+
+circles = circle.(SaveCoordArray[1,IndexList[mesh.vertex_neighbor_vertices[i,:]],end],SaveCoordArray[2,IndexList[mesh.vertex_neighbor_vertices[i,:]],end],SaveRadArray[IndexList[mesh.vertex_neighbor_vertices[i,:]],end])
+
+plot!(circles; plot_kwargs...)
+
+plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
+display(aPlot)
+i += 1
+
+
+
+
+
+
+#TODO
+#Lag nabomatrisen og lagre både koordinater og nabomatrisen som HDF5
