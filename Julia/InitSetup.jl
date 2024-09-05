@@ -1,4 +1,5 @@
 using Plots
+using Delaunay
 using HDF5
 
 function InitCoords(NPart,R)
@@ -81,16 +82,12 @@ finalMeanRad = 1
 growSize = 0.3
 RandDist = "Uniform"
 NTimeSteps = 20000
-Extrasteps = 30000
+Extrasteps = 30000 # May need to be even longer
 A = 1
 dt = 0.02
 saveEvery = 1
 
 SaveCoordArray, SaveRadArray, R = InitializeSystem(NPart,ρ,spread,finalMeanRad,growSize,RandDist,NTimeSteps,Extrasteps,A,dt,saveEvery,true)
-
-
-
-
 
 # Plot
 CircleArray = zeros(2,100)
@@ -106,8 +103,9 @@ end
 
 
 
+TimeHop = 400
 i = 1#length(SaveRadArray[1,:])
-for j in 1:floor(Int,(NTimeSteps+Extrasteps)/100)
+for j in 1:floor(Int,(NTimeSteps+Extrasteps)/TimeHop)
     println(i)
     circles = circle.(SaveCoordArray[1,:,i],SaveCoordArray[2,:,i],SaveRadArray[:,i])
 
@@ -119,34 +117,34 @@ for j in 1:floor(Int,(NTimeSteps+Extrasteps)/100)
     aPlot =  plot(circles; plot_kwargs...)
     plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
     display(aPlot)
-    i += 100
+    i += TimeHop
 end
 
-using Delaunay
-using GLMakie
-size(transpose(SaveCoordArray[:,:,end]))
 
 points = zeros(size(transpose(SaveCoordArray[:,:,end])))
 
-#points = rand(10,2)
-
-for i in 1:2
-    for j in 1:500
-        points[j,i] = transpose(SaveCoordArray[:,:,end])[j,i]
-    end
-end
+points += transpose(SaveCoordArray[:,:,end])
 
 mesh = delaunay(points)
 
-color = rand(size(mesh.points, 1))
+
+IndexList = 1:NPart
+NumNeighbours = zeros(Int,NPart)
+for iParticle in 1:NPart
+    NumNeighbours[iParticle] = length(IndexList[mesh.vertex_neighbor_vertices[iParticle,:]])
+end
+NeighbourMatrix = zeros(Int,maximum(NumNeighbours),NPart)
+for iParticle in 1:NPart
+    NeighbourMatrix[1:NumNeighbours[iParticle],iParticle] = IndexList[mesh.vertex_neighbor_vertices[iParticle,:]]
+end
+
+
+
+
+using GLMakie
+color = rand(size(mesh.points, 1))*0
 fig, ax, pl = Makie.poly(mesh.points, mesh.simplices, color=color, strokewidth=2, figure=(resolution=(800, 400),))
 display(fig)
-#save("delaunay2d.png", fig) 
-
-IndexList = 1:500
-
-IndexList[mesh.vertex_neighbor_vertices[1,:]]
-
 
 i = 1
 circles = circle.(SaveCoordArray[1,i,end],SaveCoordArray[2,i,end],SaveRadArray[i,end])
@@ -168,10 +166,25 @@ plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
 display(aPlot)
 i += 1
 
+i = 1
+circles = circle.(SaveCoordArray[1,i,end],SaveCoordArray[2,i,end],SaveRadArray[i,end])
 
 
+plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
+    color=:black, grid=false)
 
 
+aPlot =  plot(circles; plot_kwargs...)
+plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line=false,
+    color=:black, grid=false)
+
+circles = circle.(SaveCoordArray[1,NeighbourMatrix[1:NumNeighbours[i],i],end],SaveCoordArray[2,NeighbourMatrix[1:NumNeighbours[i],i],end],SaveRadArray[NeighbourMatrix[1:NumNeighbours[i],i],end])
+
+plot!(circles; plot_kwargs...)
+
+plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
+display(aPlot)
+i +=1
 
 #TODO
 #Lag nabomatrisen og lagre både koordinater og nabomatrisen som HDF5

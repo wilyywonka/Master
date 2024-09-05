@@ -6,3 +6,6 @@
 
 # Ignore object files
 *.o
+
+# Ignore the build directory
+Fortran/build/

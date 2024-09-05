@@ -1,0 +1,25 @@
+cmake_minimum_required(VERSION 3.5)
+
+project(my_project VERSION 0.1
+        DESCRIPTION "Active Solids Simulation"
+        LANGUAGES Fortran)
+
+get_filename_component (Fortran_COMPILER_NAME ${CMAKE_Fortran_COMPILER} NAME)
+if (Fortran_COMPILER_NAME MATCHES "gfortran.*")
+  set (CMAKE_Fortran_FLAGS "<gfortran flags go here>")
+elseif (Fortran_COMPILER_NAME MATCHES "ifort.*")
+  set (CMAKE_Fortran_FLAGS "<Intel flags go here>")
+endif()
+
+add_executable(ActiveSolid Program.f90)
+
+
+set(AS_MODS PrecisionMod.f90
+            TypeCustom.f90
+            SubRoutines.f90
+            CACHE INTERNAL "")
+
+add_library(AS "${AS_MODS}")
+
+
+target_link_libraries(ActiveSolid $H5FORTRAN/lib/libh5fortran.a AS)
