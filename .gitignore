@@ -9,3 +9,6 @@
 
 # Ignore the build directory
 Fortran/build/
+
+# Ignore all files in the HDF5-Folder
+Fortran/HDF5Files/*

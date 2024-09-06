@@ -21,10 +21,11 @@ set(h5fortran /home/wilhelm/Documents/h5fortran/Current/lib)
 include_directories(${h5fortran_i})
 link_directories (${h5fortran})
 
-add_executable(my_program
-	h5tests.f90
-	testmodfile.f90
-	subsubroutines.f90
+add_executable(ActiveSolidsSimulation
+	Program.f90
+	SubRoutines.f90
+	TypeCustom.f90
+	PrecisionMod.f90
 	)
 
-target_link_libraries(my_program h5fortran hdf5 hdf5_fortran hdf5hl_fortran)
+target_link_libraries(ActiveSolidsSimulation h5fortran hdf5 hdf5_fortran hdf5hl_fortran)

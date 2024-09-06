@@ -83,7 +83,7 @@ growSize = 0.3
 RandDist = "Uniform"
 NTimeSteps = 20000
 Extrasteps = 30000 # May need to be even longer
-A = 1
+A = 5
 dt = 0.02
 saveEvery = 1
 
@@ -119,6 +119,23 @@ for j in 1:floor(Int,(NTimeSteps+Extrasteps)/TimeHop)
     display(aPlot)
     i += TimeHop
 end
+TimeHop = 50
+i = 1
+anim = @animate for j ∈ 1:floor(Int,(NTimeSteps+Extrasteps)/500)
+    i = 1+(j-1)*500
+    circles = circle.(SaveCoordArray[1,:,i],SaveCoordArray[2,:,i],SaveRadArray[:,i])
+
+
+    plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
+        color=:black, grid=false)
+
+
+    aPlot =  plot(circles; plot_kwargs...)
+    plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
+    
+end
+
+gif(anim, "GrowingCellsStrongRep.gif", fps = 3)
 
 
 points = zeros(size(transpose(SaveCoordArray[:,:,end])))

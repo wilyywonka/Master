@@ -1,14 +1,15 @@
 module TypeModule
   use PrecMod
+  use h5fortran
   implicit none
   
   type :: ParamType
 
-    integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps
+    integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
 
-    real(wpf) :: zeta, xi, Fa, k, deltaT
+    real(wpf) :: zeta, xi, Fa, k, deltaT, A
 
-    character(len = :), allocatable :: SaveFileName
+    character(len = :), allocatable :: SaveFileName, IterMethod
 
   end type ParamType
 
@@ -19,6 +20,14 @@ module TypeModule
     integer(wpi) :: NewIndex, OldIndex
 
   end type DynamicVars
+
+  type :: IterationVars
+
+  real(wpf), dimension(:,:,:), allocatable :: kCoords
+  real(wpf), dimension(:,:), allocatable :: kPolAng, TmpCoords
+  real(wpf), dimension(:), allocatable :: TmpPolAng
+
+  end type IterationVars
 
   type :: NeighbourType
 
@@ -33,7 +42,7 @@ module TypeModule
     integer(wpi), dimension(:,:), allocatable :: NeighbourMatrix
     real(wpf), dimension(:,:), allocatable :: Coords
     real(wpf), dimension(:), allocatable :: PolAng
-    character(len = :), allocatable :: InitSetupFileName, NeighbourMatrixFileName
+    character(len = :), allocatable :: InitSetupFileName
 
   end type InitValues
 
@@ -56,12 +65,13 @@ module TypeModule
 
   end function
 
-  subroutine Initialize(ParameterFileName,ParamAM, DynVarAM, InitSetup)
+  subroutine Initialize(ParameterFileName,ParamAM, DynVarAM, InitSetup, IterVarAM)
     implicit none
     character(len = *), intent(in) :: ParameterFileName
     type(ParamType), intent(inout) :: ParamAM
     type(DynamicVars), intent(inout) :: DynVarAM
     type(InitValues), intent(inout) :: InitSetup
+    type(IterationVars), intent(inout) :: IterVarAM
 
     call ReadNamelist(ParameterFileName, ParamAM, InitSetup)
 
@@ -73,12 +83,23 @@ module TypeModule
     allocate(InitSetup%Coords(2,ParamAM%NumPart))
     allocate(InitSetup%PolAng(ParamAM%NumPart))
 
-    call ReadHDF5(InitSetup)
+  !  call ReadHDF5(InitSetup)
 
     ! Saved as (2,NumPart,2) = (x/y,iPart,new/old), as it is usual to need both x and y when considering lengths
     allocate(DynVarAM%Coords(2,ParamAM%NumPart,2)) 
     allocate(DynVarAM%PolAng(ParamAM%NumPart,2))
-    
+
+    ! Only two possibilities, RK4 is the default if RK2 is not chosen.
+    if (ParamAM%IterMethod == "RK2") then
+      allocate(IterVarAM%kCoords(2,ParamAM%NumPart,2))
+      allocate(IterVarAM%kPolAng(ParamAM%NumPart,2))
+    else
+      allocate(IterVarAM%kCoords(2,ParamAM%NumPart,4))
+      allocate(IterVarAM%kPolAng(ParamAM%NumPart,4))
+    end if
+
+    allocate(IterVarAM%TmpCoords(2,ParamAM%NumPart))
+    allocate(IterVarAM%TmpPolAng(ParamAM%NumPart))
     
     DynVarAM%Coords(:,:,DynVarAM%OldIndex) = InitSetup%Coords
     DynVarAM%PolAng(:,DynVarAM%OldIndex) = InitSetup%PolAng
@@ -137,14 +158,16 @@ module TypeModule
 
   
     ! Allocate
-    integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps
+    integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
     real(wpf) :: zeta, xi, Fa, k, deltaT
-    character(len=100) :: InitFileName, InitNeighbour, SaveFileName
+    character(len=100) :: InitFileName, SaveFileName, IterMethod
     integer(wpi) :: fu, rc
   
     ! Namelist definition.
-    namelist /Parameters/ NumPart, MaxNeighbour, NumTimeSteps, zeta, xi, Fa, k, deltaT, InitFileName, InitNeighbour, SaveFileName
-  
+    namelist /Parameters/ NumPart, NumTimeSteps, MaxNeighbour, SaveEvery, zeta, xi, Fa, k, deltaT, IterMethod, InitFileName, &
+      SaveFileName
+    
+    
     ! Open and read Namelist file.
     ! We have decided to not do error handling, as all parameters are printed in the end.
     ! This is also a simple implementation with minimal risks.
@@ -155,7 +178,6 @@ module TypeModule
   
     ! The filenames that are read in have big whitespaces, we trim these.
     InitSetup%InitSetupFileName = trim(InitFileName)
-    InitSetup%NeighbourMatrixFileName = trim(InitNeighbour)
 
     ParamAM%NumPart = NumPart
     ParamAM%MaxNeighbour = MaxNeighbour
@@ -165,6 +187,8 @@ module TypeModule
     ParamAM%Fa = Fa
     ParamAM%k = k
     ParamAM%deltaT = deltaT
+    ParamAM%SaveEvery = SaveEvery
+    ParamAM%IterMethod = trim(IterMethod)
     ParamAM%SaveFileName = trim(SaveFileName)
 
     ! Print parameters
@@ -173,13 +197,14 @@ module TypeModule
     write(*,"(a,g0)") "Number of particles: - - - - - - - - - - - ", NumPart
     write(*,"(a,g0)") "Maximum number of neighbours:- - - - - - - ", MaxNeighbour
     write(*,"(a,g0)") "Number of timesteps: - - - - - - - - - - - ", NumTimeSteps
+    write(*,"(a,g0)") "Timesteps between save:- - - - - - - - - - ", SaveEvery
     write(*,"(a,g0)") "Zeta:- - - - - - - - - - - - - - - - - - - ", zeta
     write(*,"(a,g0)") "Xi:- - - - - - - - - - - - - - - - - - - - ", xi
     write(*,"(a,g0)") "Fa:- - - - - - - - - - - - - - - - - - - - ", Fa
     write(*,"(a,g0)") "k: - - - - - - - - - - - - - - - - - - - - ", k
     write(*,"(a,g0)") "DeltaT:- - - - - - - - - - - - - - - - - - ", deltaT
+    write(*,"(a,g0)") "Iteration method:- - - - - - - - - - - - - ", IterMethod
     write(*,"(a,g0)") "Filename of initial system configuration:- ", InitSetup%InitSetupFileName
-    write(*,"(a,g0)") "Filename of neighbour matrix:- - - - - - - ", InitSetup%NeighbourMatrixFileName
     write(*,"(a,g0)") "Filename of savefile:- - - - - - - - - - - ", ParamAM%SaveFileName
     write(*,"(a)") "----------------------------------------------------------------------"
     
@@ -190,56 +215,20 @@ module TypeModule
     ! Input
     type(InitValues) :: InitSetup
 
+    call h5read(InitSetup%InitSetupFileName,'Coords', InitSetup%Coords)
+    call h5read(InitSetup%InitSetupFileName,'PolVec', InitSetup%PolVec)
+    call h5read(InitSetup%InitSetupFileName,'NeighbourMatrix', InitSetup%NeighbourMatrix)
+
   end subroutine ReadHDF5
 
-  subroutine WriteHDF5(ParamAM, DynVarAM, fileName, xLabel, yLabel)
-    use hdf5
+  subroutine WriteHDF5(DynVarAM, fileName)
     implicit none
-    
     ! Input
-    real(wpf),, intent(in) :: xarray, yarray
-    character(len=*), intent(in)     :: fileName, xLabel, yLabel
-    ! Allocate
-    integer(4)                       :: error
-    integer                          :: space_rank
-    integer(HSIZE_T)                 :: data_dims(1)
-    integer(HID_T)                   :: file_id, dspace_id, dset_id1, dset_id2, dset_id3, dset_id4
-  
-    !Interface
-    call h5open_f(error)
-    !Open file
-    call h5fcreate_f(fileName,H5F_ACC_TRUNC_F,file_id,error)
-  
-    !Set sizes
-    space_rank = 1
-    data_dims(1) = N
-  
-    !Open dataspace
-    call h5screate_simple_f(space_rank,data_dims,dspace_id,error)
-  
-  
-    !Create dataset
-    call h5dcreate_f(file_id,xLabel,H5T_NATIVE_DOUBLE,dspace_id,dset_id1,error)
-    call h5dcreate_f(file_id,yLabel,H5T_NATIVE_DOUBLE,dspace_id,dset_id2,error)
-  
-  
-    !Write dataset
-    call h5dwrite_f(dset_id1,H5T_NATIVE_DOUBLE,xarray,data_dims,error)
-    call h5dwrite_f(dset_id2,H5T_NATIVE_DOUBLE,yarray,data_dims,error)
-  
-  
-    !Close dataset
-    call h5dclose_f(dset_id1,error)
-    call h5dclose_f(dset_id2,error)
-  
-  
-    !Close dataspace
-    call h5sclose_f(dspace_id,error)
-  
-    !Close file
-    call h5fclose_f(file_id,error)
-    !Close interface
-    call h5close_f(error)
+
+    call h5write(ParamAM%SaveFileName,'/x', x)
+
+    
+
   end subroutine WriteHDF5
 
   

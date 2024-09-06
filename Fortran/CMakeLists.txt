@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 
-project(my_project VERSION 0.1
-        DESCRIPTION "Active Solids Simulation"
+project(ActiveSolidsProject VERSION 0.1
+        DESCRIPTION "Active Solids Simulation Project"
         )
 
 enable_language(Fortran)

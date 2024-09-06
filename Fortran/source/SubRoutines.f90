@@ -4,74 +4,159 @@ module SubRoutineModule
   
   contains
 
-  subroutine TimeStep(ParamAM, DynVarAM, Neighbours)
+  subroutine TimeStep(ParamAM, DynVarAM, IterVarAM, Neighbours)
     implicit none
-    !Input
+    ! Input
     type(ParamType), intent(in) :: ParamAM
     type(DynamicVars), intent(inout) :: DynVarAM
+    type(IterationVars), intent(inout) :: IterVarAM
     type(NeighbourType), dimension(:), intent(in) :: Neighbours
     
-    !Allocate
+    ! Allocate
     integer(wpi) :: iParticle
 
-    !Loop over particles, this loop has been deliberately made to be very easy to parallelize
-    do iParticle = 1,ParamAM%NumPart
-      call EulerStep(ParamAM, DynVarAM, Neighbours, iParticle)
-    end do
+
+    if (ParamAM%IterMethod == "RK2") then
+
+      ! ----------------------------
+      ! Runge-Kutta 2
+      ! ----------------------------
+
+      ! Loop over particles, this loop has been deliberately made to be very easy to parallelize
+      do iParticle = 1,ParamAM%NumPart
+        ! Calling the RK-Step
+        call RKStep(ParamAM, IterVarAM, Neighbours, iParticle, DynVarAM%Coords(:,:,DynVarAM%OldIndex), &
+          DynVarAM%PolAng(:,DynVarAM%OldIndex), 1_wpi)
+
+        IterVarAM%TmpCoords(:,iParticle) = DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) + &
+          ParamAM%deltaT*IterVarAM%kCoords(:,iParticle,1)
+  
+        IterVarAM%TmpPolAng(iParticle) = DynVarAM%PolAng(iParticle,DynVarAM%OldIndex) + &
+          ParamAM%deltaT*IterVarAM%kPolAng(iParticle,1)
+      end do
+
+      ! Loop over particles, this loop has been deliberately made to be very easy to parallelize
+      do iParticle = 1,ParamAM%NumPart
+        ! Calling the RK-Step
+        call RKStep(ParamAM, IterVarAM, Neighbours, iParticle, IterVarAM%TmpCoords, IterVarAM%TmpPolAng, 2_wpi)
+
+        ! All RK-Steps are done and now the new iteration is written
+        DynVarAM%Coords(:,iParticle,DynVarAM%NewIndex) = DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) + &
+          (ParamAM%deltaT/2_wpi)*(IterVarAM%kCoords(:,iParticle,1_wpi) + IterVarAM%kCoords(:,iParticle,2_wpi))
+  
+        DynVarAM%PolAng(iParticle,DynVarAM%NewIndex) = DynVarAM%PolAng(iParticle,DynVarAM%OldIndex) + &
+        (ParamAM%deltaT/2_wpi)*(IterVarAM%kPolAng(iParticle,1_wpi) + IterVarAM%kPolAng(iParticle,2_wpi))
+      end do
+    
+
+    else
+
+      ! ----------------------------
+      ! Runge-Kutta 4
+      ! ----------------------------
+
+      ! Loop over particles, this loop has been deliberately made to be very easy to parallelize
+      do iParticle = 1,ParamAM%NumPart
+        ! Calling the RK-Step
+        call RKStep(ParamAM, IterVarAM, Neighbours, iParticle, DynVarAM%Coords(:,:,DynVarAM%OldIndex), &
+        DynVarAM%PolAng(:,DynVarAM%OldIndex), 1_wpi)
+
+        IterVarAM%TmpCoords(:,iParticle) = DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) + &
+          (ParamAM%deltaT/2)*IterVarAM%kCoords(:,iParticle,1)
+
+        IterVarAM%TmpPolAng(iParticle) = DynVarAM%PolAng(iParticle,DynVarAM%OldIndex) + &
+          (ParamAM%deltaT/2)*IterVarAM%kPolAng(iParticle,1)
+      end do
+
+      ! Loop over particles, this loop has been deliberately made to be very easy to parallelize
+      do iParticle = 1,ParamAM%NumPart
+        ! Calling the RK-Step
+        call RKStep(ParamAM, IterVarAM, Neighbours, iParticle, IterVarAM%TmpCoords, IterVarAM%TmpPolAng, 2_wpi)
+
+        IterVarAM%TmpCoords(:,iParticle) = DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) + &
+          (ParamAM%deltaT/2)*IterVarAM%kCoords(:,iParticle,2)
+        IterVarAM%TmpPolAng(iParticle) = DynVarAM%PolAng(iParticle,DynVarAM%OldIndex) + &
+          (ParamAM%deltaT/2)*IterVarAM%kPolAng(iParticle,2)
+      end do
+
+      ! Loop over particles, this loop has been deliberately made to be very easy to parallelize
+      do iParticle = 1,ParamAM%NumPart
+        ! Calling the RK-Step
+        call RKStep(ParamAM, IterVarAM, Neighbours, iParticle, IterVarAM%TmpCoords, IterVarAM%TmpPolAng, 3_wpi)
+
+        IterVarAM%TmpCoords(:,iParticle) = DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) + &
+          ParamAM%deltaT*IterVarAM%kCoords(:,iParticle,3)
+
+        IterVarAM%TmpPolAng(iParticle) = DynVarAM%PolAng(iParticle,DynVarAM%OldIndex) + &
+          ParamAM%deltaT*IterVarAM%kPolAng(iParticle,3)
+      end do
+      
+      ! Loop over particles, this loop has been deliberately made to be very easy to parallelize
+      do iParticle = 1,ParamAM%NumPart
+        ! Calling the RK-Step
+        call RKStep(ParamAM, IterVarAM, Neighbours, iParticle, IterVarAM%TmpCoords, IterVarAM%TmpPolAng, 4_wpi)
+
+        ! All RK-Steps are done and now the new iteration is written
+        DynVarAM%Coords(:,iParticle,DynVarAM%NewIndex) = DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) + &
+          (ParamAM%deltaT/6_wpi)*(IterVarAM%kCoords(:,iParticle,1_wpi) + 2_wpi*IterVarAM%kCoords(:,iParticle,2_wpi) + &
+            2_wpi*IterVarAM%kCoords(:,iParticle,3_wpi) + IterVarAM%kCoords(:,iParticle,4_wpi))
+
+        DynVarAM%PolAng(iParticle,DynVarAM%NewIndex) = DynVarAM%PolAng(iParticle,DynVarAM%OldIndex) + &
+          (ParamAM%deltaT/6_wpi)*(IterVarAM%kPolAng(iParticle,1_wpi) + 2_wpi*IterVarAM%kPolAng(iParticle,2_wpi) + &
+            2_wpi*IterVarAM%kPolAng(iParticle,3_wpi) + IterVarAM%kPolAng(iParticle,4_wpi))
+
+      end do
+    end if
 
   end subroutine TimeStep
 
 
-  subroutine EulerStep(ParamAM, DynVarAM, Neighbours, iParticle)
+  subroutine RKStep(ParamAM, IterVarAM, Neighbours, iParticle, TmpCoords, TmpPolAng, Iteration)
     implicit none
     !Input
     type(ParamType), intent(in) :: ParamAM
-    type(DynamicVars), intent(inout) :: DynVarAM
+    type(IterationVars), intent(inout) :: IterVarAM
     type(NeighbourType), dimension(:), intent(in) :: Neighbours
     integer(wpi), intent(in) :: iParticle
-    
+    real(wpf), dimension(:,:), intent(in) :: TmpCoords
+    real(wpf), dimension(:), intent(in) :: TmpPolAng
+    integer(wpi), intent(in) :: Iteration
     !Allocate
     integer(wpi) :: iNeighbour
     real(wpf), dimension(2) :: TotalForce, PolVec
     real(wpf) :: TotalTorque
 
-    TotalForce = (/0._wpf,0._wpf/)
-    PolVec = (/cos(DynVarAM%PolAng(iParticle,DynVarAM%OldIndex)),sin(DynVarAM%PolAng(iParticle,DynVarAM%OldIndex))/)
-    TotalTorque = 0_wpf
+    TotalForce = (/0._wpf, 0._wpf/)
+    PolVec = (/cos(TmpPolAng(iParticle)), sin(TmpPolAng(iParticle))/)
 
-    do iNeighbour = 1, Neighbours(iParticle)%NumNeighbours
-      
-      !Adding all elastic contributions
-      TotalForce = TotalForce + LinearElasticForce(ParamAM,DynVarAM,iParticle,Neighbours(iParticle),iNeighbour)
-
-
+    ! Looping over all the neighbours of this particle to add up the elastic forces
+    do iNeighbour = 1, Neighbours(iParticle)%NumNeighbours      
+      TotalForce = TotalForce + LinearElasticForce(ParamAM,TmpCoords,iParticle,Neighbours(iParticle),iNeighbour)
     end do
 
-    !Calculating the torque using the TotalForce, as it per now only contains elastic force, and is thus the total elastic force
-    TotalTorque = TotalTorque + PolarizationTorque(ParamAM,TotalForce,PolVec)
+    ! if (RANDBETINGELSE) then
+    !   ! V = A*(radCenter-(R-radArray[iParticle]))
+    !   ! forceVec += -(V/radCenter).*[CoordArray[1,iParticle,iOld],CoordArray[2,iParticle,iOld]]
+    !   TotalForce = TotalForce + ParamAM%A(/,/)
+    ! end if
 
-    !Adding on the polarization force, to the elastic energy to produce the total force and dividing by zeta to pruce the "velocity"
+    !Calculating the torque using the TotalForce, as it per now only contains elastic force, and is thus the total elastic force
+    TotalTorque = PolarizationTorque(ParamAM,TotalForce,PolVec)
+
+    !Adding on the polarization force, to the elastic forces to produce the total force and dividing by zeta to get the "velocity"
     TotalForce = (TotalForce + PolarizationForce(ParamAM,PolVec))/ParamAM%zeta
 
-    !TODO: Setting some kind of boundary thing.
+    !Setting the k-vvectors using the "velocity" values
+    IterVarAM%kCoords(:,iParticle, Iteration) = TotalForce
+    IterVarAM%kPolAng(iParticle, Iteration) = TotalTorque
 
-    ! TODO FIX SO IT IS REAL EULER!
-    ! CALC FORCE/VEL, SAVE and use prev vel for new pos
+  end subroutine RKStep
 
-
-    !Setting the new timestep using the previous, with an added velocity-Euler-step
-    DynVarAM%Coords(:,iParticle,DynVarAM%NewIndex) = DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) + TotalForce*ParamAM%deltaT
-    DynVarAM%PolAng(iParticle,DynVarAM%NewIndex) = DynVarAM%PolAng(iParticle,DynVarAM%OldIndex) + TotalTorque*ParamAM%deltaT
-
-
-
-  end subroutine EulerStep
-
-  function LinearElasticForce(ParamAM, DynVarAM, iPart, Neighbour, iNeigh) result(ElForce)
+  function LinearElasticForce(ParamAM, TmpCoords, iPart, Neighbour, iNeigh) result(ElForce)
     implicit none
     !Input
     type(ParamType), intent(in) :: ParamAM
-    type(DynamicVars), intent(in) :: DynVarAM
+    real(wpf), dimension(:,:), intent(in) :: TmpCoords
     integer(wpi), intent(in) :: iPart, iNeigh
     type(NeighbourType), intent(in) :: Neighbour
     !Allocate
@@ -81,8 +166,7 @@ module SubRoutineModule
     real(wpf), dimension(2) :: ElForce
 
     !Calculating the difference in coordinates between the particle and the neighbour
-    DeltaCoords = DynVarAM%Coords(:,iPart,DynVarAM%OldIndex) &
-    - DynVarAM%Coords(:,Neighbour%SpecificNeighbours(iNeigh),DynVarAM%OldIndex)
+    DeltaCoords = TmpCoords(:,iPart) - TmpCoords(:,Neighbour%SpecificNeighbours(iNeigh))
 
     !Calculating the length
     length = EuclideanNormVec(DeltaCoords)
