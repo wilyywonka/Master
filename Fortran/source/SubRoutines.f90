@@ -124,7 +124,7 @@ module SubRoutineModule
     !Allocate
     integer(wpi) :: iNeighbour
     real(wpf), dimension(2) :: TotalForce, PolVec
-    real(wpf) :: TotalTorque
+    real(wpf) :: TotalTorque, PartCentreRad
 
     TotalForce = (/0._wpf, 0._wpf/)
     PolVec = (/cos(TmpPolAng(iParticle)), sin(TmpPolAng(iParticle))/)
@@ -134,35 +134,78 @@ module SubRoutineModule
       TotalForce = TotalForce + LinearElasticForce(ParamAM,TmpCoords,iParticle,Neighbours(iParticle),iNeighbour)
     end do
 
-    ! if (RANDBETINGELSE) then
-    !   ! V = A*(radCenter-(R-radArray[iParticle]))
-    !   ! forceVec += -(V/radCenter).*[CoordArray[1,iParticle,iOld],CoordArray[2,iParticle,iOld]]
-    !   TotalForce = TotalForce + ParamAM%A(/,/)
-    ! end if
+    PartCentreRad = EuclideanNormVec(TmpCoords(:,iParticle))
 
-    !Calculating the torque using the TotalForce, as it per now only contains elastic force, and is thus the total elastic force
+    ! Boundary condition
+    if (ParamAM%BoundaryMethod == "AttractiveRepellingBoundary") then
+
+      if (ParamAM%R-PartCentreRad < 2*ParamAM%b) then
+        TotalForce = TotalForce + BoundaryAttrRep(ParamAM,TmpCoords(:,iParticle), PartCentreRad)
+      end if
+
+    ! Else defaults to RepellingBoundary
+    else
+      if (PartCentreRad>ParamAM%R) then
+        TotalForce = TotalForce + BoundaryRep(ParamAM,TmpCoords(:,iParticle), PartCentreRad)
+      end if 
+    end if
+
+    ! Calculating the torque using the TotalForce, as it per now only contains elastic force, and is thus the total elastic force
     TotalTorque = PolarizationTorque(ParamAM,TotalForce,PolVec)
 
-    !Adding on the polarization force, to the elastic forces to produce the total force and dividing by zeta to get the "velocity"
+    ! Adding on the polarization force, to the elastic forces to produce the total force and dividing by zeta to get the "velocity"
     TotalForce = (TotalForce + PolarizationForce(ParamAM,PolVec))/ParamAM%zeta
 
-    !Setting the k-vvectors using the "velocity" values
+    ! Setting the k-vectors using the "velocity" values
     IterVarAM%kCoords(:,iParticle, Iteration) = TotalForce
     IterVarAM%kPolAng(iParticle, Iteration) = TotalTorque
 
   end subroutine RKStep
 
+  function BoundaryAttrRep(ParamAM, TmpPartCoords, PartCentreRad) result(BoundForce)
+    ! Input
+    type(ParamType), intent(in) :: ParamAM
+    real(wpf), dimension(2), intent(in) :: TmpPartCoords
+    real(wpf), intent(in) :: PartCentreRad
+    ! Allocate
+    real(wpf) :: ProxLength
+    ! Output
+    real(wpf), dimension(2) :: BoundForce
+  
+    ProxLength = ParamAM%R-PartCentreRad
+
+    BoundForce = -((ProxLength**2 - 2*ProxLength*ParamAM%b)/PartCentreRad)*TmpPartCoords
+
+  end function BoundaryAttrRep
+
+  function BoundaryRep(ParamAM, TmpPartCoords, PartCentreRad) result(BoundForce)
+     ! Input
+    type(ParamType), intent(in) :: ParamAM
+    real(wpf), dimension(2), intent(in) :: TmpPartCoords
+    real(wpf), intent(in) :: PartCentreRad
+    ! Allocate
+    real(wpf) :: ProxLength
+    ! Output
+    real(wpf), dimension(2) :: BoundForce
+  
+    ProxLength = PartCentreRad-ParamAM%R
+
+    BoundForce = -(ProxLength/PartCentreRad)*TmpPartCoords
+   
+  end function BoundaryRep
+
+
   function LinearElasticForce(ParamAM, TmpCoords, iPart, Neighbour, iNeigh) result(ElForce)
     implicit none
-    !Input
+    ! Input
     type(ParamType), intent(in) :: ParamAM
     real(wpf), dimension(:,:), intent(in) :: TmpCoords
     integer(wpi), intent(in) :: iPart, iNeigh
     type(NeighbourType), intent(in) :: Neighbour
-    !Allocate
+    ! Allocate
     real(wpf), dimension(2) :: DeltaCoords
     real(wpf) :: length
-    !Output
+    ! Output
     real(wpf), dimension(2) :: ElForce
 
     !Calculating the difference in coordinates between the particle and the neighbour

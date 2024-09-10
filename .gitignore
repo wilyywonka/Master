@@ -7,8 +7,10 @@
 # Ignore object files
 *.o
 
+*.gif
+
 # Ignore the build directory
-Fortran/build/
+Fortran/build/*
 
 # Ignore all files in the HDF5-Folder
 Fortran/HDF5Files/*

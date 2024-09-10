@@ -11,7 +11,7 @@ program ActiveSolidProgram
   character (len = :), allocatable :: ParameterFileName
   integer(wpi) :: iTimeStep
 
-  ParameterFileName = "Parameters.nml"
+  ParameterFileName = "../../Parameters/Parameters.nml"
 
   ! Initialize coordinates, and polarity direction
   call Initialize(ParameterFileName, ParamAM, DynVarAM, InitSetup, IterVarAM)
@@ -36,7 +36,9 @@ program ActiveSolidProgram
   
     ! Save the system if the index is 
     if (modulo(iTimeStep, ParamAM%SaveEvery) == 0) then
-      call WriteToFile(DynVarAM)
+      ! The use of iTimeStep/ParamAM%SaveEvery is whole number division, and will work, as only mod() == 0 is let through.
+      ! Write to HDF5 file.
+      call WriteToFile(DynVarAM, ParamAM, iTimeStep/ParamAM%SaveEvery)
     end if
 
   end do

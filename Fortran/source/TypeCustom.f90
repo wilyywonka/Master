@@ -7,9 +7,9 @@ module TypeModule
 
     integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
 
-    real(wpf) :: zeta, xi, Fa, k, deltaT, A
+    real(wpf) :: zeta, xi, Fa, k, deltaT, A, R, b
 
-    character(len = :), allocatable :: SaveFileName, IterMethod
+    character(len = :), allocatable :: SaveFileName, IterMethod, BaseDirName, BoundaryMethod
 
   end type ParamType
 
@@ -83,7 +83,7 @@ module TypeModule
     allocate(InitSetup%Coords(2,ParamAM%NumPart))
     allocate(InitSetup%PolAng(ParamAM%NumPart))
 
-  !  call ReadHDF5(InitSetup)
+    call ReadHDF5(InitSetup, ParamAM)
 
     ! Saved as (2,NumPart,2) = (x/y,iPart,new/old), as it is usual to need both x and y when considering lengths
     allocate(DynVarAM%Coords(2,ParamAM%NumPart,2)) 
@@ -159,13 +159,13 @@ module TypeModule
   
     ! Allocate
     integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
-    real(wpf) :: zeta, xi, Fa, k, deltaT
-    character(len=100) :: InitFileName, SaveFileName, IterMethod
+    real(wpf) :: zeta, xi, Fa, k, deltaT, b
+    character(len=100) :: InitFileName, SaveFileName, IterMethod, BaseDirName, BoundaryMethod
     integer(wpi) :: fu, rc
   
     ! Namelist definition.
-    namelist /Parameters/ NumPart, NumTimeSteps, MaxNeighbour, SaveEvery, zeta, xi, Fa, k, deltaT, IterMethod, InitFileName, &
-      SaveFileName
+    namelist /Parameters/ NumPart, NumTimeSteps, MaxNeighbour, SaveEvery, zeta, xi, Fa, b, k, deltaT, IterMethod, InitFileName, &
+      SaveFileName, BaseDirName, BoundaryMethod
     
     
     ! Open and read Namelist file.
@@ -185,11 +185,14 @@ module TypeModule
     ParamAM%zeta = zeta
     ParamAM%xi = xi
     ParamAM%Fa = Fa
+    ParamAM%b = b
     ParamAM%k = k
     ParamAM%deltaT = deltaT
     ParamAM%SaveEvery = SaveEvery
     ParamAM%IterMethod = trim(IterMethod)
     ParamAM%SaveFileName = trim(SaveFileName)
+    ParamAM%BaseDirName = trim(BaseDirName)
+    ParamAM%BoundaryMethod = trim(BoundaryMethod)
 
     ! Print parameters
     write(*,"(a)") "----------------------------------------------------------------------"
@@ -201,37 +204,65 @@ module TypeModule
     write(*,"(a,g0)") "Zeta:- - - - - - - - - - - - - - - - - - - ", zeta
     write(*,"(a,g0)") "Xi:- - - - - - - - - - - - - - - - - - - - ", xi
     write(*,"(a,g0)") "Fa:- - - - - - - - - - - - - - - - - - - - ", Fa
+    write(*,"(a,g0)") "b, boundary parameter: - - - - - - - - - - ", b
     write(*,"(a,g0)") "k: - - - - - - - - - - - - - - - - - - - - ", k
     write(*,"(a,g0)") "DeltaT:- - - - - - - - - - - - - - - - - - ", deltaT
     write(*,"(a,g0)") "Iteration method:- - - - - - - - - - - - - ", IterMethod
     write(*,"(a,g0)") "Filename of initial system configuration:- ", InitSetup%InitSetupFileName
     write(*,"(a,g0)") "Filename of savefile:- - - - - - - - - - - ", ParamAM%SaveFileName
+    write(*,"(a,g0)") "HDF5 base directory: - - - - - - - - - - - ", ParamAM%BaseDirName
+    write(*,"(a,g0)") "Boundary method: - - - - - - - - - - - - - ", ParamAM%BoundaryMethod
     write(*,"(a)") "----------------------------------------------------------------------"
     
   end subroutine ReadNamelist
 
-  subroutine ReadHDF5(InitSetup)
+  subroutine ReadHDF5(InitSetup, ParamAM)
     implicit none
     ! Input
-    type(InitValues) :: InitSetup
+    type(InitValues), intent(inout) :: InitSetup
+    type(ParamType), intent(inout) :: ParamAM
 
-    call h5read(InitSetup%InitSetupFileName,'Coords', InitSetup%Coords)
-    call h5read(InitSetup%InitSetupFileName,'PolVec', InitSetup%PolVec)
-    call h5read(InitSetup%InitSetupFileName,'NeighbourMatrix', InitSetup%NeighbourMatrix)
+    call h5read(InitSetup%InitSetupFileName, "/InitGroup/Coords", InitSetup%Coords)
+    call h5read(InitSetup%InitSetupFileName, "/InitGroup/PolVec", InitSetup%PolAng)
+    call h5read(InitSetup%InitSetupFileName, "/InitGroup/NeighbourMatrix", InitSetup%NeighbourMatrix)
+    call h5read(InitSetup%InitSetupFileName, "/InitGroup/R", ParamAM%R)
 
   end subroutine ReadHDF5
 
-  subroutine WriteHDF5(DynVarAM, fileName)
+  subroutine WriteHDF5(DynVarAM, ParamAM, nSave)
     implicit none
+
     ! Input
+    type(DynamicVars), intent(in) :: DynVarAM
+    type(ParamType), intent(in) :: ParamAM
+    integer(wpi), intent(in) :: nSave
 
-    call h5write(ParamAM%SaveFileName,'/x', x)
+    ! Allocate
+    character(len = 64) :: TmpDirNameCoord, TmpDirNamePol, NumStr, DirNameCoord, DirNamePol
 
-    
+
+    ! Concatenate the base directory and the subdirectory
+    TmpDirNameCoord = trim(ParamAM%BaseDirName) // trim("/Coords/")
+    TmpDirNamePol = trim(ParamAM%BaseDirName) // trim("/PolAng/")
+
+    ! Convert number to string
+    write (NumStr, *) nSave
+
+    ! Adjust length of string
+    NumStr = adjustl(NumStr)
+
+    ! Concatenate the number onto the strings
+    DirNameCoord = trim(TmpDirNameCoord) // trim(NumStr)
+    DirNamePol = trim(TmpDirNamePol) // trim(NumStr)
+
+
+    ! Writing DynVarAM%Coords(:,:,DynVarAM%OldIndex) to file ParamAM%SaveFileName in HDF5 directory DirName
+    call h5write(ParamAM%SaveFileName,trim(DirNameCoord), DynVarAM%Coords(:,:,DynVarAM%OldIndex))
+
+    ! Writing DynVarAM%Coords(:,:,DynVarAM%OldIndex) to file ParamAM%SaveFileName in HDF5 directory DirName
+    call h5write(ParamAM%SaveFileName,trim(DirNamePol), DynVarAM%PolAng(:,DynVarAM%OldIndex))
 
   end subroutine WriteHDF5
-
-  
 
 
 end module TypeModule
