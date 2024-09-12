@@ -130,8 +130,11 @@ module SubRoutineModule
     PolVec = (/cos(TmpPolAng(iParticle)), sin(TmpPolAng(iParticle))/)
 
     ! Looping over all the neighbours of this particle to add up the elastic forces
-    do iNeighbour = 1, Neighbours(iParticle)%NumNeighbours      
+    do iNeighbour = 1, Neighbours(iParticle)%NumNeighbours
       TotalForce = TotalForce + LinearElasticForce(ParamAM,TmpCoords,iParticle,Neighbours(iParticle),iNeighbour)
+     ! print*, "In Loop. Particle no. ", iParticle, " Neighbour no. ", Neighbours(iParticle)%SpecificNeighbours(iNeighbour), &
+     ! " Force vector ", TotalForce
+     ! print*, "EquilLength ", Neighbours(iParticle)%EquilLength(iNeighbour)
     end do
 
     PartCentreRad = EuclideanNormVec(TmpCoords(:,iParticle))
@@ -140,12 +143,14 @@ module SubRoutineModule
     if (ParamAM%BoundaryMethod == "AttractiveRepellingBoundary") then
 
       if (ParamAM%R-PartCentreRad < 2*ParamAM%b) then
+        ! Adding the attractive-repelling boundary force
         TotalForce = TotalForce + BoundaryAttrRep(ParamAM,TmpCoords(:,iParticle), PartCentreRad)
       end if
 
     ! Else defaults to RepellingBoundary
     else
       if (PartCentreRad>ParamAM%R) then
+        ! Adding the repelling boundary force
         TotalForce = TotalForce + BoundaryRep(ParamAM,TmpCoords(:,iParticle), PartCentreRad)
       end if 
     end if
@@ -174,7 +179,7 @@ module SubRoutineModule
   
     ProxLength = ParamAM%R-PartCentreRad
 
-    BoundForce = -((ProxLength**2 - 2*ProxLength*ParamAM%b)/PartCentreRad)*TmpPartCoords
+    BoundForce = -((ProxLength**2 - 2*ProxLength*ParamAM%b)/PartCentreRad)*TmpPartCoords*ParamAM%kBoundary
 
   end function BoundaryAttrRep
 
@@ -190,7 +195,7 @@ module SubRoutineModule
   
     ProxLength = PartCentreRad-ParamAM%R
 
-    BoundForce = -(ProxLength/PartCentreRad)*TmpPartCoords
+    BoundForce = -(ProxLength/PartCentreRad)*TmpPartCoords*ParamAM%kBoundary
    
   end function BoundaryRep
 
@@ -261,25 +266,3 @@ module SubRoutineModule
 
   
 end module SubRoutineModule
-
-
-
-
-
-
-
-
-
-! subroutine readHDF5(filename)
-!   use h5fortran
-!   implicit none
-!   character (len = 100), intent(in) :: filename
-!   real, allocatable                 :: particleParams(:)
-
-
-!   call h5f%open('h5fortran_example2.h5', action='w')
-!   call h5f%n('/x', 123)
-!   call h5f%close()
-
-  
-! end subroutine readHDF5

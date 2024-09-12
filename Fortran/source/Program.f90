@@ -38,7 +38,7 @@ program ActiveSolidProgram
     if (modulo(iTimeStep, ParamAM%SaveEvery) == 0) then
       ! The use of iTimeStep/ParamAM%SaveEvery is whole number division, and will work, as only mod() == 0 is let through.
       ! Write to HDF5 file.
-      call WriteToFile(DynVarAM, ParamAM, iTimeStep/ParamAM%SaveEvery)
+      call WriteHDF5(DynVarAM, ParamAM, iTimeStep/ParamAM%SaveEvery)
     end if
 
   end do

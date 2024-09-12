@@ -7,7 +7,7 @@ module TypeModule
 
     integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
 
-    real(wpf) :: zeta, xi, Fa, k, deltaT, A, R, b
+    real(wpf) :: zeta, xi, Fa, k, deltaT, A, R, b, kBoundary
 
     character(len = :), allocatable :: SaveFileName, IterMethod, BaseDirName, BoundaryMethod
 
@@ -132,7 +132,7 @@ module TypeModule
       do iNeighbour = 1, SpecNumNeighbours
         Neighbours(iParticle)%SpecificNeighbours(iNeighbour) = InitSetup%NeighbourMatrix(iNeighbour,iParticle)
         Neighbours(iParticle)%EquilLength(iNeighbour) = EuclideanNormVec(InitSetup%Coords(:,iParticle) &
-        - InitSetup%Coords(:,iNeighbour))
+        - InitSetup%Coords(:,InitSetup%NeighbourMatrix(iNeighbour,iParticle)))
       end do
     end do
 
@@ -159,13 +159,13 @@ module TypeModule
   
     ! Allocate
     integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
-    real(wpf) :: zeta, xi, Fa, k, deltaT, b
+    real(wpf) :: zeta, xi, Fa, k, deltaT, b, kBoundary
     character(len=100) :: InitFileName, SaveFileName, IterMethod, BaseDirName, BoundaryMethod
     integer(wpi) :: fu, rc
   
     ! Namelist definition.
-    namelist /Parameters/ NumPart, NumTimeSteps, MaxNeighbour, SaveEvery, zeta, xi, Fa, b, k, deltaT, IterMethod, InitFileName, &
-      SaveFileName, BaseDirName, BoundaryMethod
+    namelist /Parameters/ NumPart, NumTimeSteps, MaxNeighbour, SaveEvery, zeta, xi, Fa, b, k, kBoundary, deltaT, IterMethod, &
+      InitFileName, SaveFileName, BaseDirName, BoundaryMethod
     
     
     ! Open and read Namelist file.
@@ -187,6 +187,7 @@ module TypeModule
     ParamAM%Fa = Fa
     ParamAM%b = b
     ParamAM%k = k
+    ParamAM%kBoundary = kBoundary
     ParamAM%deltaT = deltaT
     ParamAM%SaveEvery = SaveEvery
     ParamAM%IterMethod = trim(IterMethod)
@@ -205,7 +206,8 @@ module TypeModule
     write(*,"(a,g0)") "Xi:- - - - - - - - - - - - - - - - - - - - ", xi
     write(*,"(a,g0)") "Fa:- - - - - - - - - - - - - - - - - - - - ", Fa
     write(*,"(a,g0)") "b, boundary parameter: - - - - - - - - - - ", b
-    write(*,"(a,g0)") "k: - - - - - - - - - - - - - - - - - - - - ", k
+    write(*,"(a,g0)") "k - Inter particle:- - - - - - - - - - - - ", k
+    write(*,"(a,g0)") "k - Boundary:- - - - - - - - - - - - - - - ", kBoundary
     write(*,"(a,g0)") "DeltaT:- - - - - - - - - - - - - - - - - - ", deltaT
     write(*,"(a,g0)") "Iteration method:- - - - - - - - - - - - - ", IterMethod
     write(*,"(a,g0)") "Filename of initial system configuration:- ", InitSetup%InitSetupFileName
@@ -222,10 +224,10 @@ module TypeModule
     type(InitValues), intent(inout) :: InitSetup
     type(ParamType), intent(inout) :: ParamAM
 
-    call h5read(InitSetup%InitSetupFileName, "/InitGroup/Coords", InitSetup%Coords)
-    call h5read(InitSetup%InitSetupFileName, "/InitGroup/PolVec", InitSetup%PolAng)
-    call h5read(InitSetup%InitSetupFileName, "/InitGroup/NeighbourMatrix", InitSetup%NeighbourMatrix)
-    call h5read(InitSetup%InitSetupFileName, "/InitGroup/R", ParamAM%R)
+    call h5read(InitSetup%InitSetupFileName, '/InitGroup/Coords', InitSetup%Coords)
+    call h5read(InitSetup%InitSetupFileName, '/InitGroup/PolAng', InitSetup%PolAng)
+    call h5read(InitSetup%InitSetupFileName, '/InitGroup/NeighbourMatrix', InitSetup%NeighbourMatrix)
+    call h5read(InitSetup%InitSetupFileName, '/InitGroup/R', ParamAM%R)
 
   end subroutine ReadHDF5
 

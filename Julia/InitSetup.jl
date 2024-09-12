@@ -5,28 +5,31 @@ using HDF5
 
 # ---------------------------------------------------------------
 # SET PARAMETERS - SIMULATION -
-NPart = 10
-NSimulationIterations = 10
-SaveEverySimulation = 1
-kSImulation = 0.1
+NPart = 10000
+NSimulationIterations = 100000
+SaveEverySimulation = 100
+kSimulation = 5
+kBoundarySimulation = kSimulation
 xiSimulation = 1.0
 zetaSimulation = 1.0
-FaSimulation = 1.0
-deltaTSimulation = 0.1
-IterMethodSimulation = "RK2"
+FaSimulation = 0.2
+b = 0.3
+deltaTSimulation = 0.01
+IterMethodSimulation = "RK4"
 BaseDirName = "/SaveParams"
 FileName = "InitState.h5"
 InitFileName = "../../HDF5Files/"*FileName
 SaveFileName = "../../HDF5Files/SaveFiles.h5"
+BoundaryMethod = "RepellingBoundary" #RepellingBoundary : AttractiveRepellingBoundary
 
 
 # SET PARAMETERS - SAVE -
 PathName = "./Fortran/HDF5Files/"
-NameListPath = "./Fortran/Parameters/ParametersTest.nml"
+NameListPath = "./Fortran/Parameters/Parameters.nml"
 
 
 # SET PARAMETERS - INITSTATE -
-ρ = 1.1
+ρ = 1
 spread = [0.85,1.15]
 finalMeanRad = 1
 growSize = 0.3
@@ -37,12 +40,11 @@ Extrasteps = 40000 # May need to be even longer
 A = 5
 dt = 0.02
 saveEvery = 1
-BoundaryMethod = "AttractiveRepellingBoundary" #RepellingBoundary : AttractiveRepellingBoundary
 BrownianMethod = "BrownianTemperaturePolar" # BrownianTemperaturePolar : BrownianTemperatureCartesian
-b = 0.6
+
 
 # SET PARAMETERS - PLOTTING -
-CirclePlot = true
+CirclePlot = false
 DelaunayPlot = true
 NeighbourPlot = false
 
@@ -191,6 +193,9 @@ function InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,RandDist,NTime
         iOld = 3 - iOld
         iNew = 3 - iNew
         
+        if iTimeStep%1000 == 0
+            println("Percentage finished: ", iTimeStep*100/(NTimeSteps+Extrasteps),"%")
+        end
         # Save config to array
         if save && iTimeStep%saveEvery == 0
             SaveRadArray[:,saveCounter] = radArray
@@ -203,15 +208,15 @@ function InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,RandDist,NTime
     if save
         return SaveCoordArray, SaveRadArray, R
     else
-        return CoordArray[:,:,iNew], radArray[:,:,iNew], R[:,iNew]
+        return CoordArray[:,:,iNew], radArray, R
     end
 end
 
 # Setting the function variables equal to the functions
 if BoundaryMethod == "AttractiveRepellingBoundary"
     BoundaryMethodFunc = AttractiveRepellingBoundary
-elseif BoundaryMethod =="BoundaryMethod"
-    BoundaryMethodFunc = BoundaryMethod
+elseif BoundaryMethod =="RepellingBoundary"
+    BoundaryMethodFunc = RepellingBoundary
 end
 if BrownianMethod == "BrownianTemperaturePolar"
     BrownianMethodFunc = BrownianTemperaturePolar
@@ -222,16 +227,16 @@ end
 # ----------------------------------------------------------------------------------------------------------------------------
 # CALC INITIAL VALS #
 # ----------------------------------------------------------------------------------------------------------------------------
-@time SaveCoordArray, SaveRadArray, R = InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,RandDist,NTimeSteps,Extrasteps,A,dt,saveEvery,BrownianMethodFunc,BoundaryMethodFunc,b,true)
+@time SaveCoordArray, SaveRadArray, R = InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,RandDist,NTimeSteps,Extrasteps,A,dt,saveEvery,BrownianMethodFunc,BoundaryMethodFunc,b,false)
 # ----------------------------------------------------------------------------------------------------------------------------
 
 
 # ----------------------------------------------------------------------------------------------------------------------------
 # DELAUNAY #
 # ----------------------------------------------------------------------------------------------------------------------------
-points = zeros(size(transpose(SaveCoordArray[:,:,end])))
+points = zeros(size(transpose(SaveCoordArray[:,:])))
 
-points += transpose(SaveCoordArray[:,:,end])
+points += transpose(SaveCoordArray[:,:])
 
 mesh = delaunay(points)
 
@@ -256,7 +261,7 @@ fid = h5open(FullPath,"w")
 
 h5File = create_group(fid, "InitGroup")
 
-h5File["Coords"] = SaveCoordArray[:,:,length(SaveCoordArray[1,1,:])]
+h5File["Coords"] = SaveCoordArray[:,:]
 
 h5File["PolAng"] = rand(NPart)*2*pi
 
@@ -278,7 +283,8 @@ open(NameListPath,"w") do ParameterFile
     println(ParameterFile, "    NumTimeSteps = "*string(NSimulationIterations))
     println(ParameterFile, "    MaxNeighbour = "*string(maximum(NumNeighbours)))
     println(ParameterFile, "    SaveEvery = "*string(SaveEverySimulation))
-    println(ParameterFile, "    k = "*string(kSImulation))
+    println(ParameterFile, "    k = "*string(kSimulation))
+    println(ParameterFile, "    kBoundary = "*string(kBoundarySimulation))
     println(ParameterFile, "    xi = "*string(xiSimulation))
     println(ParameterFile, "    zeta = "*string(zetaSimulation))
     println(ParameterFile, "    Fa = "*string(FaSimulation))
