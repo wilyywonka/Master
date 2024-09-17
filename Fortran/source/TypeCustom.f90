@@ -6,9 +6,7 @@ module TypeModule
   type :: ParamType
 
     integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
-
-    real(wpf) :: zeta, xi, Fa, k, deltaT, A, R, b, kBoundary
-
+    real(wpf) :: zeta, xi, Fa, k, deltaT, A, R, b, kBoundary, pi
     character(len = :), allocatable :: SaveFileName, IterMethod, BaseDirName, BoundaryMethod
 
   end type ParamType
@@ -16,7 +14,7 @@ module TypeModule
   type :: DynamicVars
 
     real(wpf), dimension(:,:,:), allocatable :: Coords
-    real(wpf), dimension(:,:), allocatable :: PolAng
+    real(wpf), dimension(:,:), allocatable :: PolAng, DisplacementVectors
     integer(wpi) :: NewIndex, OldIndex
 
   end type DynamicVars
@@ -88,21 +86,29 @@ module TypeModule
     ! Saved as (2,NumPart,2) = (x/y,iPart,new/old), as it is usual to need both x and y when considering lengths
     allocate(DynVarAM%Coords(2,ParamAM%NumPart,2)) 
     allocate(DynVarAM%PolAng(ParamAM%NumPart,2))
+    allocate(DynVarAM%DisplacementVectors(2,ParamAM%NumPart))
 
     ! Only two possibilities, RK4 is the default if RK2 is not chosen.
     if (ParamAM%IterMethod == "RK2") then
+      ! Allocate the intermidiate-step arrays, inn this case 2
       allocate(IterVarAM%kCoords(2,ParamAM%NumPart,2))
       allocate(IterVarAM%kPolAng(ParamAM%NumPart,2))
     else
+      ! Allocate the intermidiate-step arrays, inn this case 4
       allocate(IterVarAM%kCoords(2,ParamAM%NumPart,4))
       allocate(IterVarAM%kPolAng(ParamAM%NumPart,4))
     end if
 
+    ! Allocate an array of temporaryvalues to be fed into the RK-step
     allocate(IterVarAM%TmpCoords(2,ParamAM%NumPart))
     allocate(IterVarAM%TmpPolAng(ParamAM%NumPart))
     
+    ! Set the working coordinates to the initial coordinates
     DynVarAM%Coords(:,:,DynVarAM%OldIndex) = InitSetup%Coords
     DynVarAM%PolAng(:,DynVarAM%OldIndex) = InitSetup%PolAng
+
+    ! Defining pi using the max set precision
+    ParamAM%pi = 4.0_wpf*atan(1.0_wpf)
 
     
   end subroutine Initialize
@@ -231,21 +237,21 @@ module TypeModule
 
   end subroutine ReadHDF5
 
-  subroutine WriteHDF5(DynVarAM, ParamAM, nSave)
+  subroutine WriteHDF5(ParamAM, DynVarAM, nSave)
     implicit none
 
     ! Input
-    type(DynamicVars), intent(in) :: DynVarAM
     type(ParamType), intent(in) :: ParamAM
+    type(DynamicVars), intent(in) :: DynVarAM
     integer(wpi), intent(in) :: nSave
 
     ! Allocate
-    character(len = 64) :: TmpDirNameCoord, TmpDirNamePol, NumStr, DirNameCoord, DirNamePol
-
+    character(len = 64) :: TmpDirNameCoord, TmpDirNamePol, TmpDirNameDisp, NumStr, DirNameCoord, DirNamePol, DirNameDisp
 
     ! Concatenate the base directory and the subdirectory
     TmpDirNameCoord = trim(ParamAM%BaseDirName) // trim("/Coords/")
-    TmpDirNamePol = trim(ParamAM%BaseDirName) // trim("/PolAng/")
+    TmpDirNamePol   = trim(ParamAM%BaseDirName) // trim("/PolAng/")
+    TmpDirNameDisp  = trim(ParamAM%BaseDirName) // trim("/Displacement/")
 
     ! Convert number to string
     write (NumStr, *) nSave
@@ -255,14 +261,18 @@ module TypeModule
 
     ! Concatenate the number onto the strings
     DirNameCoord = trim(TmpDirNameCoord) // trim(NumStr)
-    DirNamePol = trim(TmpDirNamePol) // trim(NumStr)
+    DirNamePol   = trim(TmpDirNamePol)   // trim(NumStr)
+    DirNameDisp  = trim(TmpDirNameDisp)  // trim(NumStr)
 
 
-    ! Writing DynVarAM%Coords(:,:,DynVarAM%OldIndex) to file ParamAM%SaveFileName in HDF5 directory DirName
+    ! Writing DynVarAM%Coords(:,:,DynVarAM%OldIndex) to file ParamAM%SaveFileName in HDF5 directory DirNameCoord
     call h5write(ParamAM%SaveFileName,trim(DirNameCoord), DynVarAM%Coords(:,:,DynVarAM%OldIndex))
 
-    ! Writing DynVarAM%Coords(:,:,DynVarAM%OldIndex) to file ParamAM%SaveFileName in HDF5 directory DirName
+    ! Writing DynVarAM%PolAng(:,DynVarAM%OldIndex) to file ParamAM%SaveFileName in HDF5 directory DirNamePol
     call h5write(ParamAM%SaveFileName,trim(DirNamePol), DynVarAM%PolAng(:,DynVarAM%OldIndex))
+
+    ! Writing DynVarAM%DisplacementVectors to file ParamAM%SaveFileName in HDF5 directory DirNameDisp
+    call h5write(ParamAM%SaveFileName,trim(DirNameDisp), DynVarAM%DisplacementVectors)
 
   end subroutine WriteHDF5
 

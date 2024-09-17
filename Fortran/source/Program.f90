@@ -37,8 +37,12 @@ program ActiveSolidProgram
     ! Save the system if the index is 
     if (modulo(iTimeStep, ParamAM%SaveEvery) == 0) then
       ! The use of iTimeStep/ParamAM%SaveEvery is whole number division, and will work, as only mod() == 0 is let through.
+      ! Calculate the displacement and save in an array
+      call CalculateDisplacement(ParamAM, DynVarAM)
       ! Write to HDF5 file.
-      call WriteHDF5(DynVarAM, ParamAM, iTimeStep/ParamAM%SaveEvery)
+      call WriteHDF5(ParamAM, DynVarAM, iTimeStep/ParamAM%SaveEvery)
+      ! Truncate the angle such that there is no way of overflow and so that the angles are reset to between 0 and 2pi
+      call TruncateAngles(ParamAM, DynVarAM)
     end if
 
   end do

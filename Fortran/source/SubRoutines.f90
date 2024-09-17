@@ -132,9 +132,6 @@ module SubRoutineModule
     ! Looping over all the neighbours of this particle to add up the elastic forces
     do iNeighbour = 1, Neighbours(iParticle)%NumNeighbours
       TotalForce = TotalForce + LinearElasticForce(ParamAM,TmpCoords,iParticle,Neighbours(iParticle),iNeighbour)
-     ! print*, "In Loop. Particle no. ", iParticle, " Neighbour no. ", Neighbours(iParticle)%SpecificNeighbours(iNeighbour), &
-     ! " Force vector ", TotalForce
-     ! print*, "EquilLength ", Neighbours(iParticle)%EquilLength(iNeighbour)
     end do
 
     PartCentreRad = EuclideanNormVec(TmpCoords(:,iParticle))
@@ -264,5 +261,27 @@ module SubRoutineModule
 
   end subroutine SwitchIndex
 
+  subroutine TruncateAngles(ParamAM,DynVarAM)
+    implicit none
+    ! Input/Output
+    type(ParamType), intent(in) :: ParamAM
+    type(DynamicVars), intent(inout) :: DynVarAM
+
+    DynVarAM%PolAng = modulo(DynVarAM%PolAng, 2*ParamAM%pi)
+
+  end subroutine TruncateAngles
+
+  subroutine CalculateDisplacement(ParamAM,DynVarAM)
+    implicit none
+    type(ParamType), intent(in) :: ParamAM
+    type(DynamicVars), intent(inout) :: DynVarAM
+    integer(wpi) :: iParticle
+    real(wpf), dimension(2) :: Displacement
+    do iParticle = 1,ParamAM%NumPart
+      Displacement = (DynVarAM%Coords(:,iParticle,DynVarAM%OldIndex) - DynVarAM%Coords(:,iParticle,DynVarAM%NewIndex))
+      DynVarAM%DisplacementVectors(:,iParticle) = Displacement/EuclideanNormVec(Displacement)
+    end do
+
+  end subroutine CalculateDisplacement
   
 end module SubRoutineModule
