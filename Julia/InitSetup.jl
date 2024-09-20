@@ -5,7 +5,7 @@ using HDF5
 
 # ---------------------------------------------------------------
 # SET PARAMETERS - SIMULATION -
-NPart = 60
+NPart = 500
 NSimulationIterations = 100000
 SaveEverySimulation = 100
 kSimulation = 5
@@ -35,7 +35,7 @@ finalMeanRad = 1
 growSize = 0.3
 D = 0.01
 RandDist = "Uniform"
-NTimeSteps = 12000
+NTimeSteps = 20000
 Extrasteps = 40000 # May need to be even longer
 A = 5
 dt = 0.02

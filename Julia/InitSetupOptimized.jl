@@ -5,7 +5,7 @@ using HDF5
 
 # ---------------------------------------------------------------
 # SET PARAMETERS - SIMULATION -
-NPart::Int64 = 100
+NPart::Int64 = 1000000
 NSimulationIterations::Int64 = 2000
 SaveEverySimulation::Int64 = 2
 kSimulation::Float64 = 5.0
@@ -34,12 +34,12 @@ spread::Vector{Float64} = [0.85,1.15]
 finalMeanRad::Float64 = 1.0
 growSize::Float64 = 0.3
 D::Float64 = 0.01
-NTimeSteps::Int64 = 20
-Extrasteps::Int64 = 40 # May need to be even longer
+NTimeSteps::Int64 = 2000
+Extrasteps::Int64 = 4000 # May need to be even longer
 A::Float64 = 5.0
 dt::Float64 = 0.02
 saveEvery::Int64 = 1
-BrownianMethod::String = "BrownianTemperaturePolar" # BrownianTemperaturePolar : BrownianTemperatureCartesian
+BrownianMethod::String = "BrownianTemperatureCartesian" # BrownianTemperaturePolar : BrownianTemperatureCartesian
 ExtraSlots::Int64 = 5
 MoveMultiplier::Float64 = 1.2
 
@@ -71,28 +71,26 @@ function BrownianTemperaturePolar!(RandDisp::Matrix{Float64}, randAngle::Vector{
     # This will ensure a uniformally distributed points, even when using polar coordinates.
     randRadius[:] = sqrt.(rand(NPart))
     # Set the coordinates using the cosine and sine of the angles, times the radius
-    RandDisp[1,:] = cos.(randAngle).*randRadius*sqrt(D*dt)
-    RandDisp[2,:] = sin.(randAngle).*randRadius*sqrt(D*dt)
+    RandDisp[1,:] = cos.(randAngle).*randRadius.*sqrt(D*dt)
+    RandDisp[2,:] = sin.(randAngle).*randRadius.*sqrt(D*dt)
     return nothing
 end
 
-function BrownianTemperatureCartesian!(RandDisp::Matrix{Float64}, NPart::Int64, D::Float64, dt::Float64)
+function BrownianTemperatureCartesian!(RandDisp::Matrix{Float64}, randAngle::Vector{Float64}, randRadius::Vector{Float64}, NPart::Int64, D::Float64, dt::Float64)
     # Set the coordinates using the cosine and sine of the angles, times the radius
-    RandDisp[1,:] = (2*rand(NPart)-1)*sqrt(D*dt*3)
-    RandDisp[2,:] = (2*rand(NPart)-1)*sqrt(D*dt*3)
+    @view(RandDisp[1,:]) .= (2 .*rand(NPart).-1).*sqrt(D*dt*3)
+    @view(RandDisp[2,:]) .= (2 .*rand(NPart).-1).*sqrt(D*dt*3)
+    #RandDisp[2,:] = (2*rand(NPart)-1).*sqrt(D*dt*3)
     return nothing
 end
 
 function RepellingBoundary!(Coords::Matrix{Float64}, BoundaryForce::Matrix{Float64}, R::Float64, radCenter::Vector{Float64}, b::Float64, iParticle::Int64)
-    # Initialize a force vector
-    println("Hei")
-    println(iParticle)
-    
-    BoundaryForce[:,iParticle] .= 0.0
+    # Initialize a force vector CoordArray, BoundaryForce, R, radCenter, b, iParticle
+    @view(BoundaryForce[:,iParticle]) .= 0.0
     # Check if the CENTER of the particles is outside the circle
     if radCenter[iParticle] > R
         # Add it to the force vector
-        BoundaryForce[:,iParticle] += -(((radCenter[iParticle]-R))/radCenter[iParticle]).*[Coords[1,iParticle],Coords[2,iParticle]]
+        @view(BoundaryForce[:,iParticle]) .+= -(((radCenter[iParticle]-R))/radCenter[iParticle]).*[Coords[1,iParticle],Coords[2,iParticle]]
     end
     return nothing
 end
@@ -157,12 +155,11 @@ function InitNeighbours(NeighbourCount::Matrix{Int64}, NCells::Int64, CoordArray
     return NeighbourIndices, MaxPart
 end
 
-function UpdateNeighbours!(NeighbourIndices::Array{Int64},NeighbourCount::Matrix{Int64}, NCells::Int64, CoordArrayShift::Matrix{Float64},l::Float64,DivVec::Vector{Float64}, MaxPart::Int64, ExtraSlots::Int64)
+function UpdateNeighbours(NeighbourIndices::Array{Int64},NeighbourCount::Matrix{Int64}, NCells::Int64, CoordArrayShift::Matrix{Float64},l::Float64,DivVec::Vector{Float64}, MaxPart::Int64, ExtraSlots::Int64)
     iCell::Int64 = 0
     jCell::Int64 = 0
     IndexPlacement::Int64 = 0
     NeighbourCount .= 0
-
     for (iParticle,Vec) in enumerate(eachslice(CoordArrayShift,dims=2))
 
         DivVec .= Vec./l
@@ -178,21 +175,23 @@ function UpdateNeighbours!(NeighbourIndices::Array{Int64},NeighbourCount::Matrix
             @inbounds NeighbourIndices[IndexPlacement,iCell,jCell] = iParticle
         else
             println("The number of particles in the cell is greater than MaxNeighbour! Reshaping NeighbourMatrix and recursively calling function.")
+            MaxPart += 5
             NeighbourIndices = zeros(Int64,MaxPart+ExtraSlots,NCells,NCells)
-            UpdateNeighbours!(NeighbourIndices,NeighbourCount, NCells, CoordArrayShift, l, DivVec, MaxPart, ExtraSlots)
+            MaxPart, NeighbourIndices = UpdateNeighbours(NeighbourIndices,NeighbourCount, NCells, CoordArrayShift, l, DivVec, MaxPart, ExtraSlots)
+            return MaxPart, NeighbourIndices
         end
 
     end
-    return nothing
+    return MaxPart, NeighbourIndices
 end
 
-function CalcElasticRepulsion!(NeighbourCount::Matrix{Int64}, NeighbourIndices::Array{Int64}, forceVec::Matrix{Float64}, radArray::Vector{Float64}, DeltaVec::Matrix{Float64}, DeltaDist::Vector{Float64}, CoordArray::Matrix{Float64}, NCells::Int64)
+function CalcElasticRepulsion!(NeighbourCount::Matrix{Int64}, NeighbourIndices::Array{Int64}, forceVec::Matrix{Float64}, radArray::Vector{Float64}, CountCoordPairs::Matrix{Pair{CartesianIndex{2}, Int64}}, DeltaVec::Matrix{Float64}, TempVec::Matrix{Float64}, DeltaDist::Vector{Float64}, CoordArray::Matrix{Float64}, NCells::Int64)
     forceVec .= 0.0
-    println(size(DeltaVec))
-    CoordPairs = eachslice(CoordArray[:,:], dims= 2)
-    #Loop over 
-    for (IdxCart, NumInCell) in pairs(NeighbourCount)
-
+    #CoordPairs = eachslice(CoordArray[:,:], dims= 2)
+    CountCoordPairs .= collect(pairs(NeighbourCount))
+    #Loop over
+    Threads.@threads for (IdxCart, NumInCell) in CountCoordPairs
+        # nested task error: MethodError: no method matching firstindex(::Base.Pairs{CartesianIndex{2}, Int64, CartesianIndices{2, Tuple{…}}, Matrix{Int64}})
         if NumInCell > 0
             # Defining vectors and local variables
             IdxCurrent::Vector{Int64} = [IdxCart[1],IdxCart[2]]
@@ -203,6 +202,8 @@ function CalcElasticRepulsion!(NeighbourCount::Matrix{Int64}, NeighbourIndices::
             # Defining all of the relative cells to be looped over
             iCells::Vector{Int64} = [-1, 0 ,1]
             jCells::Vector{Int64} = [-1, 0 ,1]
+            iNeighbour::Int64 = 0
+           # TestIndices::Vector{Int64} = []
 
             # In the edge cases, the extra indices will not be included
             if IdxCells[1] == 1 
@@ -218,7 +219,9 @@ function CalcElasticRepulsion!(NeighbourCount::Matrix{Int64}, NeighbourIndices::
 
             # Loop over neighbouring cells
             for iCellIdx in iCells, jCellIdx in jCells
-                IdxCells = IdxCurrent + [iCellIdx, jCellIdx]
+                IdxCells .= IdxCurrent
+                @view(IdxCells[1]) .+= iCellIdx
+                @view(IdxCells[2]) .+= jCellIdx
                 # If the current cell to check is the cell we are in
                 if IdxCells == IdxCurrent && NumInCell > 1
                     # Loop over particles and neighbours
@@ -226,69 +229,66 @@ function CalcElasticRepulsion!(NeighbourCount::Matrix{Int64}, NeighbourIndices::
                         # Check if the indexes are the same
                         if iNeighbour != iParticle
                             # Save distance between particles
-                            println(size(DeltaVec))
-                            @inbounds @view(DeltaVec[:,iParticle]) .= CoordPairs[iParticle] - CoordPairs[iNeighbour]
-                            println(size(DeltaVec))
+                            @inbounds @view(DeltaVec[:,iParticle]) .= @view(CoordArray[:,iParticle]) .- @view(CoordArray[:,iNeighbour]) #CoordPairs[iParticle] - CoordPairs[iNeighbour]
                             # Calculate the force between the particles
-                            LinearElasticity!(DeltaVec, DeltaDist, forceVec, radArray, iNeighbour, iParticle)
+                            LinearElasticity!(DeltaVec, TempVec, DeltaDist, forceVec, radArray, iNeighbour, iParticle)
                         end
                     end
                 # Cell is not the same as the current cell
-                else
+                elseif IdxCells != IdxCurrent
                     # Number of particles in the neighbouring cell
                     NumInNeighCell = NeighbourCount[IdxCells[1],IdxCells[2]]
                     # Check if there are particles in the neighbouring cell
                     if NumInNeighCell > 0
+                       # TestIndices = NeighbourIndices[1:NumInNeighCell,IdxCells[1],IdxCells[2]]
                         # Loop over particles and neighbours
-                        for iParticle in PartInCell, iNeighbour in NeighbourIndices[1:NumInNeighCell,IdxCells[1],IdxCells[2]]
-#                            println(DeltaVec)
+                        for iParticle in PartInCell, iNeighbourIdx in 1:NumInNeighCell
                             # Save distance between particles
-                            @inbounds @view(DeltaVec[:,iParticle]) .= CoordPairs[iParticle] .- CoordPairs[iNeighbour]
- #                           println("NumnPart",NeighbourCount[IdxCart])
-  #                          println(iParticle,iNeighbour)
-   #                         println(CoordArray[:,iNeighbour])
+                            iNeighbour = @view(NeighbourIndices[iNeighbourIdx,IdxCells[1],IdxCells[2]])[1]
+                            @inbounds @view(DeltaVec[:,iParticle]) .= @view(CoordArray[:,iParticle]) .- @view(CoordArray[:,iNeighbour]) #CoordPairs[iParticle] .- CoordPairs[iNeighbour]
                             # Calculate the force between the particles
-     #                       println(DeltaVec)
-                            
-                            LinearElasticity!(DeltaVec, DeltaDist, forceVec, radArray, iNeighbour, iParticle)
+                            LinearElasticity!(DeltaVec, TempVec, DeltaDist, forceVec, radArray, iNeighbour, iParticle)
                         end
                     end
                 end
+
             end
         end
     end
     return nothing
 end
 
-function LinearElasticity!(DeltaVec::Matrix{Float64}, DeltaDist::Vector{Float64}, forceVec::Matrix{Float64}, radArray::Vector{Float64}, iNeighbour::Int64, iParticle::Int64)
-    # Calculating the difference in coordinates
-    println(size(DeltaVec))
+
+function LinearElasticity!(DeltaVec::Matrix{Float64}, TempVec::Matrix{Float64}, DeltaDist::Vector{Float64}, forceVec::Matrix{Float64}, radArray::Vector{Float64}, iNeighbour::Int64, iParticle::Int64)
+    # Setting Tempvec as squared of Deltavec
+    @inbounds @view(TempVec[:,iParticle]) .= @view(DeltaVec[:,iParticle]).^2
     # Saving the distance between the particles
-    @inbounds @view(DeltaDist[iParticle]) .= sqrt(sum(DeltaVec[:,iParticle].^2))
+    @inbounds @view(DeltaDist[iParticle]) .= sqrt(TempVec[1,iParticle]+TempVec[2,iParticle])
     # Checking if the particles are overlapping
     if @view(DeltaDist[iParticle])[1] < (radArray[iNeighbour] + radArray[iParticle])
         # Calculating the force of the overlap and adding the force to the force vector
-        @inbounds @view(forceVec[:,iParticle]) .+= (abs(radArray[iParticle] + radArray[iNeighbour] - DeltaDist[iParticle])^(3/2))/DeltaDist[iParticle] .* DeltaVec[:,iParticle]
+        @inbounds @view(forceVec[:,iParticle]) .+= (abs.(@view(radArray[iParticle]) .+ @view(radArray[iNeighbour]) .- @view(DeltaDist[iParticle])).^(3/2)) .* @view(DeltaVec[:,iParticle])./@view(DeltaDist[iParticle])
     end
     return nothing
 end
 
-function CalcBoundaryRepulsion!(CoordArray::Matrix{Float64},BoundaryMethod!::Function,forceVec::Matrix{Float64},TempVec::Matrix{Float64},R::Float64,radCenter::Vector{Float64},b::Float64,BoundaryForce::Matrix{Float64})
-    for (iParticle, Vec) in enumerate(eachslice(CoordArray,dims=2))
+function CalcBoundaryRepulsion!(NPart::Int64,CoordArray::Matrix{Float64},BoundaryMethod!::Function,forceVec::Matrix{Float64},CoordArraySliced::Vector{Tuple{Int64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}},TempVec::Matrix{Float64},R::Float64,radCenter::Vector{Float64},b::Float64,BoundaryForce::Matrix{Float64})
+    #CoordArraySliced .= collect(enumerate(eachslice(CoordArray,dims=2)))
+    Threads.@threads for iParticle in 1:NPart
         # Assign Vec squared to TempVec
-        @inbounds @view(TempVec[:,iParticle]) .= Vec.^2
+        @inbounds @view(TempVec[:,iParticle]) .= @view(CoordArray[:,iParticle]).^2
         # Calculate the distance from the center of the circle
-        @inbounds @view(radCenter[iParticle]) .= sqrt(sum(@view(TempVec[:,iParticle])[1]))
+        @inbounds @view(radCenter[iParticle]) .= sqrt(sum(TempVec[:,iParticle]))
         # Calculate the boundary force and add to the forceVec array
         BoundaryMethod!(CoordArray, BoundaryForce, R, radCenter, b, iParticle)
         # Add the boundary force to the force vector
-        @view(forceVec[:,iParticle]) .+= BoundaryForce[:,iParticle]
+        @inbounds @view(forceVec[:,iParticle]) .+= @view(BoundaryForce[:,iParticle])
     end
 end
 
 function CalcNextStep!(CoordArray::Array{Float64},iNew::Int64,iOld::Int64,forceVec::Matrix{Float64},A::Float64,dt::Float64,RandDisp::Matrix{Float64},NPart::Int64)
-    for iParticle in 1:NPart
-        @view(CoordArray[:,iParticle,iNew]) .= CoordArray[:,iParticle,iOld] + forceVec[:,iParticle]*A*dt + RandDisp[:,iParticle]
+    Threads.@threads for iParticle in 1:NPart
+        @view(CoordArray[:,iParticle,iNew]) .= @view(CoordArray[:,iParticle,iOld]) .+ @view(forceVec[:,iParticle]).*A.*dt .+ @view(RandDisp[:,iParticle])
     end
 end
 
@@ -379,6 +379,8 @@ end
 # ceil((l/0.85)^2)
 # @benchmark maximum(NeighbourCount2)
 
+a= abs.(rand(2,5))
+bT = collect(enumerate(eachslice(a,dims=2)))
 
 
 function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Float64},finalMeanRad::Float64,growSize::Float64,NTimeSteps::Int64,Extrasteps::Int64, ExtraSlots::Int64, MoveMultiplier::Float64, 
@@ -413,7 +415,7 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
 
     # Set the incremental increase in radius equal to the growSize/ NTimeSteps
     IncrementRadIncrease::Float64 = growSize/NTimeSteps
-    IncrementDReduce::Float64 = 2*D/(Extrasteps)
+    IncrementDReduce::Float64 = 2*D/(Extrasteps+1)
     
     # Initializing a vector to be filled with radii to each particle
     radCenter::Vector{Float64} = zeros(NPart)
@@ -456,28 +458,53 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
 
     CoordArrayShift .= @view(CoordArray[:,:,iOld]) .+ MoveMultiplier*R
 
-    NeighbourIndices, MaxPart = InitNeighbours(NeighbourCount,NCells,CoordArrayShift[:,:,iOld],l,DivVec,5)
-
+    NeighbourIndices, MaxPart = InitNeighbours(NeighbourCount,NCells,CoordArrayShift[:,:,iOld],l,DivVec,ExtraSlots)
+    CountCoordPairs::Matrix{Pair{CartesianIndex{2}, Int64}} = collect(pairs(NeighbourCount))
+    CoordArraySliced::Vector{Tuple{Int64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}} = collect(enumerate(eachslice(CoordArrayShift,dims=2)))
     # Loop over all timesteps AND extrasteps
     for iTimeStep in 1:(NTimeSteps + Extrasteps)
-        println("Hei3huh")
         # Calculate the thermal displacements
         BrownianMethod!(RandDisp, randAngle, randRadius, NPart, D, dt)
-        println(1)
+        
+        # if iTimeStep%300 == 0
+
+
+        #     CircleArray = zeros(2,100)
+        #     PhiCirc = LinRange(0,2*pi,100)
+        #     CircleArray[1,:] = R*cos.(PhiCirc)
+        #     CircleArray[2,:] = R*sin.(PhiCirc)
+
+
+        #     function circle(x, y, r=1; n=30)
+        #         θ = 0:360÷n:360
+        #         Plots.Shape(r*sind.(θ) .+ x, r*cosd.(θ) .+ y)
+        #     end
+
+
+        #     # TimeHop = 400
+        #     # i = 1
+        #     circles = circle.(CoordArray[1,:,iOld],CoordArray[2,:,iOld],radArray[:])
+
+
+        #     plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
+        #         color=:black, grid=false)
+
+
+        #     aPlot =  Plots.plot(circles; plot_kwargs...)
+        #     Plots.plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
+        #     display(aPlot)
+        # end
+
         # Sort particles in boxes
-        UpdateNeighbours!(NeighbourIndices,NeighbourCount,NCells,CoordArrayShift,l,DivVec,MaxPart,ExtraSlots)
-        println(2)
+        MaxPart, NeighbourIndices = UpdateNeighbours(NeighbourIndices,NeighbourCount,NCells,CoordArrayShift,l,DivVec,MaxPart,ExtraSlots)
         # Parallel loop over all cells
-        CalcElasticRepulsion!(NeighbourCount,NeighbourIndices,forceVec,radArray,DeltaVec,DeltaDist,CoordArray[:,:,iOld],NCells)
-        println(3)
+        CalcElasticRepulsion!(NeighbourCount,NeighbourIndices,forceVec,radArray,CountCoordPairs,DeltaVec,TempVec,DeltaDist,CoordArray[:,:,iOld],NCells)
         # Parallel loop over all particles
-        CalcBoundaryRepulsion!(CoordArray[:,:,iOld],BoundaryMethod!,forceVec,TempVec,R,radCenter,b,BoundaryForce)
-        println("Hei1")
+        CalcBoundaryRepulsion!(NPart,CoordArray[:,:,iOld],BoundaryMethod!,forceVec,CoordArraySliced,TempVec,R,radCenter,b,BoundaryForce)
         # Multiply this force with A and dt, and add this onto the cordinates of the particle
         CalcNextStep!(CoordArray,iNew,iOld,forceVec,A,dt,RandDisp,NPart)
-        println("Hei2")
+        # Calculate the shifted coordinates
         CoordArrayShift .= @view(CoordArray[:,:,iNew]) .+ MoveMultiplier*R
-        println("Hei3")
         # Increase radius if iTimeStep <= NTimeSteps
         if iTimeStep <= NTimeSteps
             radArray .+= IncrementRadIncrease
@@ -496,25 +523,47 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
         if iTimeStep%1000 == 0
             println("Percentage finished: ", iTimeStep*100/(NTimeSteps+Extrasteps),"%")
         end
-        println("Hei4")
         # Save snapshot
         if save && iTimeStep%saveEvery == 0
-            SaveRadArray[:,saveCounter] = radArray
-            SaveCoordArray[:,:,saveCounter] = CoordArray[:,:,iOld]
+            @view(SaveRadArray[:,saveCounter]) .= radArray
+            @view(SaveCoordArray[:,:,saveCounter]) .= @view(CoordArray[:,:,iOld])
             saveCounter += 1
         end
-        println("Hei5")
-
     end
+
+
+
+    # CircleArray = zeros(2,100)
+    # PhiCirc = LinRange(0,2*pi,100)
+    # CircleArray[1,:] = R*cos.(PhiCirc)
+    # CircleArray[2,:] = R*sin.(PhiCirc)
+
+
+    # function circle(x, y, r=1; n=30)
+    #     θ = 0:360÷n:360
+    #     Plots.Shape(r*sind.(θ) .+ x, r*cosd.(θ) .+ y)
+    # end
+
+
+    # # TimeHop = 400
+    # # i = 1
+    # circles = circle.(CoordArray[1,:,iOld],CoordArray[2,:,iOld],radArray[:])
+
+
+    # plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
+    #     color=:black, grid=false)
+
+
+    # aPlot =  Plots.plot(circles; plot_kwargs...)
+    # Plots.plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
+    # display(aPlot)
 
     # Return
     if save
         return SaveCoordArray, SaveRadArray, R
     else
-        return CoordArray[:,:,iNew], radArray, R
+        return CoordArray[:,:,iOld], radArray, R
     end
-    println("Hei3")
-#    return CoordArray[:,:,iNew], radArray, R
 end
 
 # Setting the function variables equal to the functions
@@ -534,10 +583,16 @@ using BenchmarkTools
 # ----------------------------------------------------------------------------------------------------------------------------
 # CALC INITIAL VALS #
 # ----------------------------------------------------------------------------------------------------------------------------
-
-@time SaveCoordArray, SaveRadArray, R =  InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, true)
-
+NumberParticles = [10,100,200,500,1000,2000,5000,10000]
+timeTaken = zeros(length(NumberParticles))
+for iP in 1:length(timeTaken)
+    time = @benchmark InitializeSystem(NumberParticles[$iP],ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, true)
+    timeTaken[iP] = mean(time).time /10^9
+end
 # ----------------------------------------------------------------------------------------------------------------------------
+plot(NumberParticles, timeTaken)
+scatter!(NumberParticles, timeTaken)
+plot!(LinRange(10,10000,1000), 0.0004.*LinRange(10,10000,1000).*log.(LinRange(10,10000,1000)))
 
 # ----------------------------------------------------------------------------------------------------------------------------
 # DELAUNAY #
@@ -619,30 +674,30 @@ end
 # scatter!([100,200,300,500,1000],[40,84,140,226,534])
 # plot!(LinRange(100,1000,1000),LinRange(100,1000,1000).*0.5.+100)
 
-# CircleArray = zeros(2,100)
-# PhiCirc = LinRange(0,2*pi,100)
-# CircleArray[1,:] = R*cos.(PhiCirc)
-# CircleArray[2,:] = R*sin.(PhiCirc)
+CircleArray = zeros(2,100)
+PhiCirc = LinRange(0,2*pi,100)
+CircleArray[1,:] = R*cos.(PhiCirc)
+CircleArray[2,:] = R*sin.(PhiCirc)
 
 
-# function circle(x, y, r=1; n=30)
-#     θ = 0:360÷n:360
-#     Plots.Shape(r*sind.(θ) .+ x, r*cosd.(θ) .+ y)
-# end
+function circle(x, y, r=1; n=30)
+    θ = 0:360÷n:360
+    Plots.Shape(r*sind.(θ) .+ x, r*cosd.(θ) .+ y)
+end
 
 
 # TimeHop = 400
 # i = 1
-# circles = circle.(SaveCoordArray[1,:,end],SaveCoordArray[2,:,end],SaveRadArray[:,end])
+circles = circle.(SaveCoordArray[1,:,end],SaveCoordArray[2,:,end],SaveRadArray[:,end])
 
 
-# plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
-#     color=:black, grid=false)
+plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
+    color=:black, grid=false)
 
 
-# aPlot =  Plots.plot(circles; plot_kwargs...)
-# Plots.plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
-# display(aPlot)
+aPlot =  Plots.plot(circles; plot_kwargs...)
+Plots.plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
+display(aPlot)
 
 if CirclePlot
     CircleArray = zeros(2,100)
