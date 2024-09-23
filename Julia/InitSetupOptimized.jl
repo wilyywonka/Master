@@ -185,12 +185,12 @@ function UpdateNeighbours(NeighbourIndices::Array{Int64},NeighbourCount::Matrix{
     return MaxPart, NeighbourIndices
 end
 
-function CalcElasticRepulsion!(NeighbourCount::Matrix{Int64}, NeighbourIndices::Array{Int64}, forceVec::Matrix{Float64}, radArray::Vector{Float64}, CountCoordPairs::Matrix{Pair{CartesianIndex{2}, Int64}}, DeltaVec::Matrix{Float64}, TempVec::Matrix{Float64}, DeltaDist::Vector{Float64}, CoordArray::Matrix{Float64}, NCells::Int64)
+function CalcElasticRepulsion!(NeighbourCount::Matrix{Int64}, NeighbourIndices::Array{Int64}, forceVec::Matrix{Float64}, radArray::Vector{Float64}, CountCoords::CartesianIndices{2, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}}, DeltaVec::Matrix{Float64}, TempVec::Matrix{Float64}, DeltaDist::Vector{Float64}, CoordArray::Matrix{Float64}, NCells::Int64)
     forceVec .= 0.0
     #CoordPairs = eachslice(CoordArray[:,:], dims= 2)
-    CountCoordPairs .= collect(pairs(NeighbourCount))
     #Loop over
-    Threads.@threads for (IdxCart, NumInCell) in CountCoordPairs
+    Threads.@threads for IdxCart in CountCoords
+        NumInCell::Int64 = @view(NeighbourCount[IdxCart])[1]
         # nested task error: MethodError: no method matching firstindex(::Base.Pairs{CartesianIndex{2}, Int64, CartesianIndices{2, Tuple{…}}, Matrix{Int64}})
         if NumInCell > 0
             # Defining vectors and local variables
@@ -272,13 +272,14 @@ function LinearElasticity!(DeltaVec::Matrix{Float64}, TempVec::Matrix{Float64}, 
     return nothing
 end
 
+
 function CalcBoundaryRepulsion!(NPart::Int64,CoordArray::Matrix{Float64},BoundaryMethod!::Function,forceVec::Matrix{Float64},CoordArraySliced::Vector{Tuple{Int64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}},TempVec::Matrix{Float64},R::Float64,radCenter::Vector{Float64},b::Float64,BoundaryForce::Matrix{Float64})
     #CoordArraySliced .= collect(enumerate(eachslice(CoordArray,dims=2)))
     Threads.@threads for iParticle in 1:NPart
         # Assign Vec squared to TempVec
         @inbounds @view(TempVec[:,iParticle]) .= @view(CoordArray[:,iParticle]).^2
         # Calculate the distance from the center of the circle
-        @inbounds @view(radCenter[iParticle]) .= sqrt(sum(TempVec[:,iParticle]))
+        @inbounds @view(radCenter[iParticle]) .= sqrt(TempVec[1,iParticle].+TempVec[2,iParticle])
         # Calculate the boundary force and add to the forceVec array
         BoundaryMethod!(CoordArray, BoundaryForce, R, radCenter, b, iParticle)
         # Add the boundary force to the force vector
@@ -459,7 +460,8 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
     CoordArrayShift .= @view(CoordArray[:,:,iOld]) .+ MoveMultiplier*R
 
     NeighbourIndices, MaxPart = InitNeighbours(NeighbourCount,NCells,CoordArrayShift[:,:,iOld],l,DivVec,ExtraSlots)
-    CountCoordPairs::Matrix{Pair{CartesianIndex{2}, Int64}} = collect(pairs(NeighbourCount))
+    CountCoords::CartesianIndices{2, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}} = CartesianIndices(NeighbourCount)
+    CountLength::Int64 = length(NeighbourCount)
     CoordArraySliced::Vector{Tuple{Int64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}} = collect(enumerate(eachslice(CoordArrayShift,dims=2)))
     # Loop over all timesteps AND extrasteps
     for iTimeStep in 1:(NTimeSteps + Extrasteps)
@@ -487,7 +489,7 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
 
 
         #     plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
-        #         color=:black, grid=false)
+        #         color=:black, grid=false, xlims=(-R-1,R+1), ylims=(-R-1,R+1))
 
 
         #     aPlot =  Plots.plot(circles; plot_kwargs...)
@@ -497,8 +499,12 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
 
         # Sort particles in boxes
         MaxPart, NeighbourIndices = UpdateNeighbours(NeighbourIndices,NeighbourCount,NCells,CoordArrayShift,l,DivVec,MaxPart,ExtraSlots)
+        if length(NeighbourCount) != CountLength
+            CountCoords = CartesianIndices(NeighbourCount)
+            #CountCoordPairs .= collect(pairs(NeighbourCount))
+        end
         # Parallel loop over all cells
-        CalcElasticRepulsion!(NeighbourCount,NeighbourIndices,forceVec,radArray,CountCoordPairs,DeltaVec,TempVec,DeltaDist,CoordArray[:,:,iOld],NCells)
+        CalcElasticRepulsion!(NeighbourCount,NeighbourIndices,forceVec,radArray,CountCoords,DeltaVec,TempVec,DeltaDist,CoordArray[:,:,iOld],NCells)
         # Parallel loop over all particles
         CalcBoundaryRepulsion!(NPart,CoordArray[:,:,iOld],BoundaryMethod!,forceVec,CoordArraySliced,TempVec,R,radCenter,b,BoundaryForce)
         # Multiply this force with A and dt, and add this onto the cordinates of the particle
@@ -583,17 +589,26 @@ using BenchmarkTools
 # ----------------------------------------------------------------------------------------------------------------------------
 # CALC INITIAL VALS #
 # ----------------------------------------------------------------------------------------------------------------------------
-NumberParticles = [10,100,200,500,1000,2000,5000,10000]
+
+InitializeSystem(10,ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, true)
+
+
+NumberParticles = [10,30,60,100,300,600,1000,3000,6000,10000,20000,30000,40000,50000,60000]
 timeTaken = zeros(length(NumberParticles))
 for iP in 1:length(timeTaken)
     time = @benchmark InitializeSystem(NumberParticles[$iP],ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, true)
     timeTaken[iP] = mean(time).time /10^9
 end
 # ----------------------------------------------------------------------------------------------------------------------------
-plot(NumberParticles, timeTaken)
-scatter!(NumberParticles, timeTaken)
-plot!(LinRange(10,10000,1000), 0.0004.*LinRange(10,10000,1000).*log.(LinRange(10,10000,1000)))
+aPlot = plot(NumberParticles, timeTaken,xaxis=:lin,yaxis=:lin,label="Time Elapsed",size = (900,800))
+scatter!(NumberParticles, timeTaken,label=false)
+plot!(LinRange(10,60000,1000), 0.0031.*LinRange(10,60000,1000),label="f(x) = 0.0031x")
+ylabel!("Time Elapsed [s]")
+xlabel!("Number of particles [1]")
 
+savefig(aPlot,"TimeplotNumPart.png")
+#plot!(LinRange(10,60000,1000), log.(LinRange(10,60000,1000)))
+#0.0031*1000000*10/3600
 # ----------------------------------------------------------------------------------------------------------------------------
 # DELAUNAY #
 # ----------------------------------------------------------------------------------------------------------------------------
