@@ -15,3 +15,9 @@ Fortran/build/*
 
 # Ignore all files in the HDF5-Folder
 Fortran/HDF5Files/*
+
+# Ignore all png files
+*.png
+
+# Ignore all jld files
+*.jld

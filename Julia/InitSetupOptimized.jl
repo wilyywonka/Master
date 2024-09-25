@@ -5,22 +5,24 @@ using HDF5
 
 # ---------------------------------------------------------------
 # SET PARAMETERS - SIMULATION -
-NPart::Int64 = 1000000
-NSimulationIterations::Int64 = 2000
-SaveEverySimulation::Int64 = 2
-kSimulation::Float64 = 5.0
-kBoundarySimulation::Float64 = kSimulation
-xiSimulation::Float64 = 1.0
+NPart::Int64 = 100000
+NSimulationIterations::Int64 = 5000
+SaveEverySimulation::Int64 = 10
+kSimulation::Float64 = 60.0
+kNonLin::Float64 = 60.0
+kBoundarySimulation::Float64 = 20.0
+xiSimulation::Float64 = 5.0
 zetaSimulation::Float64 = 1.0
-FaSimulation::Float64 = 1
+FaSimulation::Float64 = 1.0
 b::Float64 = 0.3
-deltaTSimulation::Float64 = 0.01
+deltaTSimulation::Float64 = 0.001
 IterMethodSimulation::String = "RK4"
 BaseDirName::String = "/SaveParams"
 FileName::String = "InitState.h5"
 InitFileName::String = "../../HDF5Files/"*FileName
 SaveFileName::String = "../../HDF5Files/SaveFiles.h5"
 BoundaryMethod::String = "RepellingBoundary" #RepellingBoundary : AttractiveRepellingBoundary
+ElasticityMethod::String = "LinearElasticity" #LinearElasticity : NonLinearElasticity
 
 
 # SET PARAMETERS - SAVE -
@@ -34,8 +36,8 @@ spread::Vector{Float64} = [0.85,1.15]
 finalMeanRad::Float64 = 1.0
 growSize::Float64 = 0.3
 D::Float64 = 0.01
-NTimeSteps::Int64 = 2000
-Extrasteps::Int64 = 4000 # May need to be even longer
+NTimeSteps::Int64 = 10000
+Extrasteps::Int64 = 20000 # May need to be even longer
 A::Float64 = 5.0
 dt::Float64 = 0.02
 saveEvery::Int64 = 1
@@ -45,7 +47,7 @@ MoveMultiplier::Float64 = 1.2
 
 # SET PARAMETERS - PLOTTING -
 CirclePlot::Bool = false
-DelaunayPlot::Bool = true
+DelaunayPlot::Bool = false
 NeighbourPlot::Bool = false
 
 # ---------------------------------------------------------------
@@ -485,11 +487,11 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
 
         #     # TimeHop = 400
         #     # i = 1
-        #     circles = circle.(CoordArray[1,:,iOld],CoordArray[2,:,iOld],radArray[:])
+        #     circles = circle.(CoordArray[1,:,iOld],CoordArray[2,:,iOld],radArray[:].*0.5)
 
 
         #     plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
-        #         color=:black, grid=false, xlims=(-R-1,R+1), ylims=(-R-1,R+1))
+        #         color=:white, grid=false, xlims=(-R-1,R+1), ylims=(-R-1,R+1))
 
 
         #     aPlot =  Plots.plot(circles; plot_kwargs...)
@@ -590,31 +592,40 @@ using BenchmarkTools
 # CALC INITIAL VALS #
 # ----------------------------------------------------------------------------------------------------------------------------
 
-InitializeSystem(10,ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, true)
+@time SaveCoordArray, SaveRadArray,R = InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, false)
 
 
-NumberParticles = [10,30,60,100,300,600,1000,3000,6000,10000,20000,30000,40000,50000,60000]
-timeTaken = zeros(length(NumberParticles))
-for iP in 1:length(timeTaken)
-    time = @benchmark InitializeSystem(NumberParticles[$iP],ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, true)
-    timeTaken[iP] = mean(time).time /10^9
-end
-# ----------------------------------------------------------------------------------------------------------------------------
-aPlot = plot(NumberParticles, timeTaken,xaxis=:lin,yaxis=:lin,label="Time Elapsed",size = (900,800))
-scatter!(NumberParticles, timeTaken,label=false)
-plot!(LinRange(10,60000,1000), 0.0031.*LinRange(10,60000,1000),label="f(x) = 0.0031x")
-ylabel!("Time Elapsed [s]")
-xlabel!("Number of particles [1]")
+# NumberParticles = [10,30,60,100,300,600,1000,3000,6000,10000,20000,30000,40000,50000,60000]
+# timeTaken = zeros(length(NumberParticles))
+# for iP in 1:length(timeTaken)
+#     time = @benchmark InitializeSystem(NumberParticles[$iP],ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, true)
+#     timeTaken[iP] = mean(time).time /10^9
+# end
+# # ----------------------------------------------------------------------------------------------------------------------------
+# aPlot = plot(NumberParticles, timeTaken,xaxis=:lin,yaxis=:lin,label="Time Elapsed",size = (900,800))
+# scatter!(NumberParticles, timeTaken,label=false)
+# plot!(LinRange(10,60000,1000), 0.0031.*LinRange(10,60000,1000),label="f(x) = 0.0031x")
+# ylabel!("Time Elapsed [s]")
+# xlabel!("Number of particles [1]")
+# timeTaken
+# TimePartnumArray =zeros(2,length(timeTaken))
+# TimePartnumArray[1,:] .= NumberParticles
+# TimePartnumArray[2,:] .= timeTaken
+# TimePartnumArray
+# using JLD
+# save("TimePartnumArray.jld", "TimePartnumArray", TimePartnumArray)
 
-savefig(aPlot,"TimeplotNumPart.png")
+#savefig(aPlot,"TimeplotNumPart.png")
 #plot!(LinRange(10,60000,1000), log.(LinRange(10,60000,1000)))
 #0.0031*1000000*10/3600
+
+
 # ----------------------------------------------------------------------------------------------------------------------------
 # DELAUNAY #
 # ----------------------------------------------------------------------------------------------------------------------------
-points = zeros(size(transpose(SaveCoordArray[:,:,end])))
+points = zeros(size(transpose(SaveCoordArray[:,:])))
 
-points += transpose(SaveCoordArray[:,:,end])
+points += transpose(SaveCoordArray[:,:])
 
 mesh = delaunay(points)
 
@@ -639,13 +650,15 @@ fid = h5open(FullPath,"w")
 
 h5File = create_group(fid, "InitGroup")
 
-h5File["Coords"] = SaveCoordArray[:,:,end]
+h5File["Coords"] = SaveCoordArray[:,:]
 
 h5File["PolAng"] = rand(NPart)*2*pi
 
 h5File["NeighbourMatrix"] = NeighbourMatrix
 
 h5File["R"] = R
+
+h5File["MaxNeighbour"] = maximum(NumNeighbours)
 
 close(fid)
 # ----------------------------------------------------------------------------------------------------------------------------
@@ -659,9 +672,10 @@ open(NameListPath,"w") do ParameterFile
     println(ParameterFile, "&Parameters")
     println(ParameterFile, "    NumPart = "*string(NPart))
     println(ParameterFile, "    NumTimeSteps = "*string(NSimulationIterations))
-    println(ParameterFile, "    MaxNeighbour = "*string(maximum(NumNeighbours)))
     println(ParameterFile, "    SaveEvery = "*string(SaveEverySimulation))
+    println(ParameterFile, "    MaxNeighbour = "*string(maximum(NumNeighbours)))
     println(ParameterFile, "    k = "*string(kSimulation))
+    println(ParameterFile, "    kNonLin = "*string(kNonLin))
     println(ParameterFile, "    kBoundary = "*string(kBoundarySimulation))
     println(ParameterFile, "    xi = "*string(xiSimulation))
     println(ParameterFile, "    zeta = "*string(zetaSimulation))
@@ -673,6 +687,7 @@ open(NameListPath,"w") do ParameterFile
     println(ParameterFile, "    InitFileName = "*"\""*InitFileName*"\"")
     println(ParameterFile, "    SaveFileName = "*"\""*SaveFileName*"\"")
     println(ParameterFile, "    BoundaryMethod = "*"\""*BoundaryMethod*"\"")
+    println(ParameterFile, "    ElasticityMethod = "*"\""*ElasticityMethod*"\"")
     println(ParameterFile, "/")
 end
 # ----------------------------------------------------------------------------------------------------------------------------

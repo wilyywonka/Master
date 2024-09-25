@@ -19,6 +19,9 @@ program ActiveSolidProgram
   ! Initialize neighbour type
   call InitializeNeighbours(ParamAM,InitSetup,Neighbours)
 
+  ! Write the neighbour matrix to file
+  call WriteNeighboursHDF5(ParamAM,InitSetup)
+
   ! The initialization is now done, and the InitSetup can be deallocated
   call DeallocateInit(InitSetup)
 

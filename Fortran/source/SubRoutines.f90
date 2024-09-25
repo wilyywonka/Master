@@ -129,10 +129,18 @@ module SubRoutineModule
     TotalForce = (/0._wpf, 0._wpf/)
     PolVec = (/cos(TmpPolAng(iParticle)), sin(TmpPolAng(iParticle))/)
 
-    ! Looping over all the neighbours of this particle to add up the elastic forces
-    do iNeighbour = 1, Neighbours(iParticle)%NumNeighbours
-      TotalForce = TotalForce + LinearElasticForce(ParamAM,TmpCoords,iParticle,Neighbours(iParticle),iNeighbour)
-    end do
+    ! Elasticity method
+    if (ParamAM%ElasticityMethod == "LinearElasticity") then
+      ! Looping over all the neighbours of this particle to add up the linear elastic forces
+      do iNeighbour = 1, Neighbours(iParticle)%NumNeighbours
+        TotalForce = TotalForce + LinearElasticForce(ParamAM,TmpCoords,iParticle,Neighbours(iParticle),iNeighbour)
+      end do
+    else
+      ! Looping over all the neighbours of this particle to add up the nonlinear elastic forces
+      do iNeighbour = 1, Neighbours(iParticle)%NumNeighbours
+        TotalForce = TotalForce + NonLinearElasticForce(ParamAM,TmpCoords,iParticle,Neighbours(iParticle),iNeighbour)
+      end do
+    end if
 
     PartCentreRad = EuclideanNormVec(TmpCoords(:,iParticle))
 
@@ -218,6 +226,32 @@ module SubRoutineModule
 
     !Force is calculated as -k(l-l_0)\vec(d), where d is in the direction of the displacement, as a unitary vector
     Elforce = -ParamAM%k*(length-Neighbour%EquilLength(iNeigh))*DeltaCoords/length
+
+  end function
+
+
+  function NonLinearElasticForce(ParamAM, TmpCoords, iPart, Neighbour, iNeigh) result(ElForce)
+    implicit none
+    ! Input
+    type(ParamType), intent(in) :: ParamAM
+    real(wpf), dimension(:,:), intent(in) :: TmpCoords
+    integer(wpi), intent(in) :: iPart, iNeigh
+    type(NeighbourType), intent(in) :: Neighbour
+    ! Allocate
+    real(wpf), dimension(2) :: DeltaCoords
+    real(wpf) :: length
+    ! Output
+    real(wpf), dimension(2) :: ElForce
+
+    !Calculating the difference in coordinates between the particle and the neighbour
+    DeltaCoords = TmpCoords(:,iPart) - TmpCoords(:,Neighbour%SpecificNeighbours(iNeigh))
+
+    !Calculating the length
+    length = EuclideanNormVec(DeltaCoords)
+
+    !Force is calculated as -k(l-l_0)\vec(d), where d is in the direction of the displacement, as a unitary vector
+    Elforce = -(ParamAM%k*(length-Neighbour%EquilLength(iNeigh)) + ParamAM%kNonLin*(length-Neighbour%EquilLength(iNeigh))**3) &
+      *DeltaCoords/length
 
   end function
   

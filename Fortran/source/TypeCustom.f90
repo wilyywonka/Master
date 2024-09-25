@@ -6,8 +6,8 @@ module TypeModule
   type :: ParamType
 
     integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
-    real(wpf) :: zeta, xi, Fa, k, deltaT, A, R, b, kBoundary, pi
-    character(len = :), allocatable :: SaveFileName, IterMethod, BaseDirName, BoundaryMethod
+    real(wpf) :: zeta, xi, Fa, k, deltaT, A, R, b, kBoundary, pi, kNonLin
+    character(len = :), allocatable :: SaveFileName, IterMethod, BaseDirName, BoundaryMethod, ElasticityMethod
 
   end type ParamType
 
@@ -81,6 +81,7 @@ module TypeModule
     allocate(InitSetup%Coords(2,ParamAM%NumPart))
     allocate(InitSetup%PolAng(ParamAM%NumPart))
 
+    ! Read the HDF5 init setup file
     call ReadHDF5(InitSetup, ParamAM)
 
     ! Saved as (2,NumPart,2) = (x/y,iPart,new/old), as it is usual to need both x and y when considering lengths
@@ -165,13 +166,13 @@ module TypeModule
   
     ! Allocate
     integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
-    real(wpf) :: zeta, xi, Fa, k, deltaT, b, kBoundary
-    character(len=100) :: InitFileName, SaveFileName, IterMethod, BaseDirName, BoundaryMethod
+    real(wpf) :: zeta, xi, Fa, k, deltaT, b, kBoundary, kNonLin
+    character(len=100) :: InitFileName, SaveFileName, IterMethod, BaseDirName, BoundaryMethod, ElasticityMethod
     integer(wpi) :: fu, rc
   
     ! Namelist definition.
     namelist /Parameters/ NumPart, NumTimeSteps, MaxNeighbour, SaveEvery, zeta, xi, Fa, b, k, kBoundary, deltaT, IterMethod, &
-      InitFileName, SaveFileName, BaseDirName, BoundaryMethod
+      InitFileName, SaveFileName, BaseDirName, BoundaryMethod, kNonLin, ElasticityMethod
     
     
     ! Open and read Namelist file.
@@ -193,6 +194,7 @@ module TypeModule
     ParamAM%Fa = Fa
     ParamAM%b = b
     ParamAM%k = k
+    ParamAM%kNonLin = kNonLin
     ParamAM%kBoundary = kBoundary
     ParamAM%deltaT = deltaT
     ParamAM%SaveEvery = SaveEvery
@@ -200,6 +202,7 @@ module TypeModule
     ParamAM%SaveFileName = trim(SaveFileName)
     ParamAM%BaseDirName = trim(BaseDirName)
     ParamAM%BoundaryMethod = trim(BoundaryMethod)
+    ParamAM%ElasticityMethod = trim(ElasticityMethod)
 
     ! Print parameters
     write(*,"(a)") "----------------------------------------------------------------------"
@@ -212,7 +215,8 @@ module TypeModule
     write(*,"(a,g0)") "Xi:- - - - - - - - - - - - - - - - - - - - ", xi
     write(*,"(a,g0)") "Fa:- - - - - - - - - - - - - - - - - - - - ", Fa
     write(*,"(a,g0)") "b, boundary parameter: - - - - - - - - - - ", b
-    write(*,"(a,g0)") "k - Inter particle:- - - - - - - - - - - - ", k
+    write(*,"(a,g0)") "k - Inter particle, Linear:- - - - - - - - ", k
+    write(*,"(a,g0)") "k - Inter particle, NonLinear: - - - - - - ", kNonLin
     write(*,"(a,g0)") "k - Boundary:- - - - - - - - - - - - - - - ", kBoundary
     write(*,"(a,g0)") "DeltaT:- - - - - - - - - - - - - - - - - - ", deltaT
     write(*,"(a,g0)") "Iteration method:- - - - - - - - - - - - - ", IterMethod
@@ -220,6 +224,7 @@ module TypeModule
     write(*,"(a,g0)") "Filename of savefile:- - - - - - - - - - - ", ParamAM%SaveFileName
     write(*,"(a,g0)") "HDF5 base directory: - - - - - - - - - - - ", ParamAM%BaseDirName
     write(*,"(a,g0)") "Boundary method: - - - - - - - - - - - - - ", ParamAM%BoundaryMethod
+    write(*,"(a,g0)") "Elasticity method: - - - - - - - - - - - - ", ParamAM%ElasticityMethod
     write(*,"(a)") "----------------------------------------------------------------------"
     
   end subroutine ReadNamelist
@@ -275,6 +280,27 @@ module TypeModule
     call h5write(ParamAM%SaveFileName,trim(DirNameDisp), DynVarAM%DisplacementVectors)
 
   end subroutine WriteHDF5
+
+
+
+  subroutine WriteNeighboursHDF5(ParamAM, InitSetup)
+    implicit none
+
+    ! Input
+    type(ParamType), intent(in) :: ParamAM
+    type(InitValues), intent(in) :: InitSetup
+
+    ! Allocate
+    character(len = 64) :: DirNameNeighbours
+
+    ! Concatenate the base directory and the subdirectory
+    DirNameNeighbours = trim(ParamAM%BaseDirName) // trim("/NeighbourMatrix")
+
+    ! Writing DynVarAM%Coords(:,:,DynVarAM%OldIndex) to file ParamAM%SaveFileName in HDF5 directory DirNameNeighbours
+    call h5write(ParamAM%SaveFileName,trim(DirNameNeighbours), InitSetup%NeighbourMatrix)
+
+  end subroutine WriteNeighboursHDF5
+
 
 
 end module TypeModule
