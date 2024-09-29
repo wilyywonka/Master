@@ -1,8 +1,8 @@
 &Parameters
-    NumPart = 100000
-    NumTimeSteps = 50
-    SaveEvery = 1
-    MaxNeighbour = 10
+    NumPart = 50000
+    NumTimeSteps = 22500
+    SaveEvery = 10
+    MaxNeighbour = 9
     k = 60.0
     kNonLin = 60.0
     kBoundary = 20.0

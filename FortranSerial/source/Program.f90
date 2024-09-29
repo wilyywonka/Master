@@ -11,7 +11,7 @@ program ActiveSolidProgram
   character (len = :), allocatable :: ParameterFileName
   integer(wpi) :: iTimeStep
 
-  ParameterFileName = "../../Parameters/Parameters.nml"
+  ParameterFileName = "../../../Parameters/Parameters.nml"
 
   ! Initialize coordinates, and polarity direction
   call Initialize(ParameterFileName, ParamAM, DynVarAM, InitSetup, IterVarAM)
@@ -20,7 +20,7 @@ program ActiveSolidProgram
   call InitializeNeighbours(ParamAM,InitSetup,Neighbours)
 
   ! Write the neighbour matrix to file
-  call WriteNeighboursHDF5(ParamAM,InitSetup)
+  call WriteNeighboursRadiusHDF5(ParamAM,InitSetup)
 
   ! The initialization is now done, and the InitSetup can be deallocated
   call DeallocateInit(InitSetup)

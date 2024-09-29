@@ -5,7 +5,7 @@ using HDF5
 
 # ---------------------------------------------------------------
 # SET PARAMETERS - SIMULATION -
-NPart::Int64 = 100000
+NPart::Int64 = 50000
 NSimulationIterations::Int64 = 5000
 SaveEverySimulation::Int64 = 10
 kSimulation::Float64 = 60.0
@@ -19,15 +19,15 @@ deltaTSimulation::Float64 = 0.001
 IterMethodSimulation::String = "RK4"
 BaseDirName::String = "/SaveParams"
 FileName::String = "InitState.h5"
-InitFileName::String = "../../HDF5Files/"*FileName
-SaveFileName::String = "../../HDF5Files/SaveFiles.h5"
-BoundaryMethod::String = "RepellingBoundary" #RepellingBoundary : AttractiveRepellingBoundary
-ElasticityMethod::String = "LinearElasticity" #LinearElasticity : NonLinearElasticity
+InitFileName::String = "../../../HDF5Files/"*FileName
+SaveFileName::String = "../../../HDF5Files/SaveFiles.h5"
+BoundaryMethodSimulation::String = "RepellingBoundary" #RepellingBoundary : AttractiveRepellingBoundary
+ElasticityMethod::String = "LinearElasticity" #LinearElasticity : NonLinearElasticity : FENEElasticity
 
 
 # SET PARAMETERS - SAVE -
-PathName::String = "./Fortran/HDF5Files/"
-NameListPath::String = "./Fortran/Parameters/Parameters.nml"
+PathName::String = "./HDF5Files/"
+NameListPath::String = "./Parameters/Parameters.nml"
 
 
 # SET PARAMETERS - INITSTATE -
@@ -42,10 +42,12 @@ A::Float64 = 5.0
 dt::Float64 = 0.02
 saveEvery::Int64 = 1
 BrownianMethod::String = "BrownianTemperatureCartesian" # BrownianTemperaturePolar : BrownianTemperatureCartesian
+BoundaryMethod::String = "AttractiveRepellingBoundary" #RepellingBoundary : AttractiveRepellingBoundary
 ExtraSlots::Int64 = 5
 MoveMultiplier::Float64 = 1.2
 
 # SET PARAMETERS - PLOTTING -
+PlotEnd::Bool = false
 CirclePlot::Bool = false
 DelaunayPlot::Bool = false
 NeighbourPlot::Bool = false
@@ -80,8 +82,8 @@ end
 
 function BrownianTemperatureCartesian!(RandDisp::Matrix{Float64}, randAngle::Vector{Float64}, randRadius::Vector{Float64}, NPart::Int64, D::Float64, dt::Float64)
     # Set the coordinates using the cosine and sine of the angles, times the radius
-    @view(RandDisp[1,:]) .= (2 .*rand(NPart).-1).*sqrt(D*dt*3)
-    @view(RandDisp[2,:]) .= (2 .*rand(NPart).-1).*sqrt(D*dt*3)
+    @view(RandDisp[1,:]) .= (2 .*rand(NPart).-1).*sqrt(D*dt*6)
+    @view(RandDisp[2,:]) .= (2 .*rand(NPart).-1).*sqrt(D*dt*6)
     #RandDisp[2,:] = (2*rand(NPart)-1).*sqrt(D*dt*3)
     return nothing
 end
@@ -686,7 +688,7 @@ open(NameListPath,"w") do ParameterFile
     println(ParameterFile, "    BaseDirName = "*"\""*BaseDirName*"\"")
     println(ParameterFile, "    InitFileName = "*"\""*InitFileName*"\"")
     println(ParameterFile, "    SaveFileName = "*"\""*SaveFileName*"\"")
-    println(ParameterFile, "    BoundaryMethod = "*"\""*BoundaryMethod*"\"")
+    println(ParameterFile, "    BoundaryMethod = "*"\""*BoundaryMethodSimulation*"\"")
     println(ParameterFile, "    ElasticityMethod = "*"\""*ElasticityMethod*"\"")
     println(ParameterFile, "/")
 end
@@ -703,32 +705,32 @@ end
 # plot([100,200,300,500,1000],[40,84,140,226,534])
 # scatter!([100,200,300,500,1000],[40,84,140,226,534])
 # plot!(LinRange(100,1000,1000),LinRange(100,1000,1000).*0.5.+100)
+if PlotEnd
+    CircleArray = zeros(2,100)
+    PhiCirc = LinRange(0,2*pi,100)
+    CircleArray[1,:] = R*cos.(PhiCirc)
+    CircleArray[2,:] = R*sin.(PhiCirc)
 
-CircleArray = zeros(2,100)
-PhiCirc = LinRange(0,2*pi,100)
-CircleArray[1,:] = R*cos.(PhiCirc)
-CircleArray[2,:] = R*sin.(PhiCirc)
+
+    function circle(x, y, r=1; n=30)
+        θ = 0:360÷n:360
+        Plots.Shape(r*sind.(θ) .+ x, r*cosd.(θ) .+ y)
+    end
 
 
-function circle(x, y, r=1; n=30)
-    θ = 0:360÷n:360
-    Plots.Shape(r*sind.(θ) .+ x, r*cosd.(θ) .+ y)
+    # TimeHop = 400
+    # i = 1
+    circles = circle.(SaveCoordArray[1,:,end],SaveCoordArray[2,:,end],SaveRadArray[:,end])
+
+
+    plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
+        color=:black, grid=false)
+
+
+    aPlot =  Plots.plot(circles; plot_kwargs...)
+    Plots.plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
+    display(aPlot)
 end
-
-
-# TimeHop = 400
-# i = 1
-circles = circle.(SaveCoordArray[1,:,end],SaveCoordArray[2,:,end],SaveRadArray[:,end])
-
-
-plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
-    color=:black, grid=false)
-
-
-aPlot =  Plots.plot(circles; plot_kwargs...)
-Plots.plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
-display(aPlot)
-
 if CirclePlot
     CircleArray = zeros(2,100)
     PhiCirc = LinRange(0,2*pi,100)

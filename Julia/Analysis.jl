@@ -1,12 +1,12 @@
 using GLMakie
 using HDF5
 
-NumIter = 428
-NPart = 100000
+NumIter = 2250
+NPart = 50000
 MarkerSizePlot = 2
 ArrowLengthPlot = 0.9
 
-R = h5read("./Fortran/HDF5Files/InitState.h5", "InitGroup/R")
+R = h5read("./Fortran/HDF5Files/SaveFiles.h5", "SaveParams/R")
 
 FilePath = "./Fortran/HDF5Files/SaveFiles.h5"
 
@@ -36,7 +36,7 @@ CircleArray[2,:] = R*sin.(PhiCirc)
 #GLMakie.activate!(; screen_config...)
 
 
-GLMakie.activate!(inline = false,focus_on_show=true)
+GLMakie.activate!(inline = false,focus_on_show=false)
 fig = Figure(size = (950,800))
 iPlot = Observable(1)
 
@@ -58,7 +58,7 @@ display(fig)
 
 for i in 1:NumIter
     iPlot[] = i
-    sleep(0.005)
+    sleep(0.01)
 end
 
 
@@ -79,7 +79,6 @@ PartPointDat = @lift Point2f.(SimulatedCoords[1,:,$iPlotPol], SimulatedCoords[2,
 PartPolDiff = @lift angularChange(SimulatedPolAng[:,($iPlotPol-1)],SimulatedPolAng[:,$iPlotPol])
 
 
-colorrangeScatter = [0, 0.5]
 cmap = :matter
 
 ax = Axis(figDiffPol[1, 1])
@@ -103,36 +102,68 @@ end
 # end
 
 
-
-GLMakie.activate!(inline = false,focus_on_show=true)
 figQuivCol = Figure(size = (950,800))
 iPlotQuivCol = Observable(2)
 
 PartPointDat = @lift Point2f.(SimulatedCoords[1,:,$iPlotQuivCol], SimulatedCoords[2,:,$iPlotQuivCol])
 ArrowPolDat = @lift Vec2f.(ArrowLengthPlot.*cos.(SimulatedPolAng[:,$iPlotQuivCol]), ArrowLengthPlot.*sin.(SimulatedPolAng[:,$iPlotQuivCol]))
+PolAngCol = @lift SimulatedPolAng[:,$iPlotQuivCol].%(2*pi)
 PartPolDiff = @lift angularChange(SimulatedPolAng[:,($iPlotQuivCol-1)],SimulatedPolAng[:,$iPlotQuivCol])
 ArrowDispDat = @lift Vec2f.(ArrowLengthPlot*SimulatedDisplacement[1,:,$iPlotQuivCol],ArrowLengthPlot*SimulatedDisplacement[2,:,$iPlotQuivCol])
 axQuivCol = Axis(figQuivCol[1, 1])
 
-
-
 GLMakie.scatter!(axQuivCol, PartPointDat,color=PartPolDiff,colormap = cmap,markersize = 7,label="Pol. Turn rate")
 GLMakie.lines!(axQuivCol,CircleArray[1,:],CircleArray[2,:],color="green",label="Border")
-GLMakie.arrows!(PartPointDat,ArrowPolDat,color="blue",arrowsize=5,label="Polarization")
+GLMakie.arrows!(PartPointDat,ArrowPolDat,color ="blue",arrowsize=5,label="Polarization")
 GLMakie.arrows!(PartPointDat,ArrowDispDat,color="red",arrowsize=5,label="Displacement")
 
 figQuivCol[1, 2] = GLMakie.Legend(figQuivCol,axQuivCol)
 
+
 display(figQuivCol)
 
-for i in 200:238
+for i in 2:NumIter
     iPlotQuivCol[] = i
-    sleep(0.1)
+    sleep(0.05)
 end
-iPlotQuivCol[] += 200
-iPlotQuivCol[] += 1
+
 # record(figQuivCol,"PolQuivAnimationLong.gif",2:5:NumIter,framerate=30) do i
 #     iPlotQuivCol[]=i
+# end
+
+
+figCol = Figure(size = (1300,1100))
+iPlotCol = Observable(1)
+
+PartPointDat = @lift Point2f.(SimulatedCoords[1,:,$iPlotCol], SimulatedCoords[2,:,$iPlotCol])
+ArrowPolDat = @lift Vec2f.(ArrowLengthPlot.*cos.(SimulatedPolAng[:,$iPlotCol]), ArrowLengthPlot.*sin.(SimulatedPolAng[:,$iPlotCol]))
+PolAngCol = @lift SimulatedPolAng[:,$iPlotCol].%(2*pi)
+ArrowDispCol = @lift Vec2f.(ArrowLengthPlot*SimulatedDisplacement[1,:,$iPlotCol],ArrowLengthPlot*SimulatedDisplacement[2,:,$iPlotCol])
+DispAngCol = @lift atan.(SimulatedDisplacement[2,:,$iPlotCol],SimulatedDisplacement[1,:,$iPlotCol])
+
+axCol = Axis(figCol[1, 1])
+
+
+
+colorrangePol = [0, 2*pi]
+
+GLMakie.lines!(axCol,CircleArray[1,:],CircleArray[2,:],color="green",label="Border")
+#GLMakie.arrows!(PartPointDat,ArrowPolDat,color=PolAngCol,colorrange =colorrangePol,colormap = :cyclic_grey_15_85_c0_n256,arrowsize=5,label="Polarization")
+GLMakie.arrows!(PartPointDat,ArrowPolDat,color=PolAngCol,colorrange =colorrangePol,colormap = :phase,arrowsize=5,label="Polarization")
+#GLMakie.arrows!(PartPointDat,ArrowDispCol,color=DispAngCol,colorrange =colorrangePol,colormap = :phase,arrowsize=5,label="Displacement")
+
+figCol[1, 2] = GLMakie.Legend(figCol,axCol)
+
+
+display(figCol)
+
+for i in 1:NumIter
+    iPlotCol[] = i
+    sleep(0.01)
+end
+
+# record(figCol,"TopDefAnnihilaion.gif",1:5:NumIter,framerate=10) do i
+#     iPlotCol[]=i
 # end
 
 

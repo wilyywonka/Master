@@ -283,7 +283,7 @@ module TypeModule
 
 
 
-  subroutine WriteNeighboursHDF5(ParamAM, InitSetup)
+  subroutine WriteNeighboursRadiusHDF5(ParamAM, InitSetup)
     implicit none
 
     ! Input
@@ -291,15 +291,19 @@ module TypeModule
     type(InitValues), intent(in) :: InitSetup
 
     ! Allocate
-    character(len = 64) :: DirNameNeighbours
+    character(len = 64) :: DirNameNeighbours, DirNameR
 
     ! Concatenate the base directory and the subdirectory
     DirNameNeighbours = trim(ParamAM%BaseDirName) // trim("/NeighbourMatrix")
+    DirNameR          = trim(ParamAM%BaseDirName) // trim("/R")
 
-    ! Writing DynVarAM%Coords(:,:,DynVarAM%OldIndex) to file ParamAM%SaveFileName in HDF5 directory DirNameNeighbours
+    ! Writing InitSetup%NeighbourMatrix to file ParamAM%SaveFileName in HDF5 directory DirNameNeighbours
     call h5write(ParamAM%SaveFileName,trim(DirNameNeighbours), InitSetup%NeighbourMatrix)
+    ! Writing ParamAM%R to file ParamAM%SaveFileName in HDF5 directory R
+    call h5write(ParamAM%SaveFileName,trim(DirNameR), ParamAM%R)
 
-  end subroutine WriteNeighboursHDF5
+
+  end subroutine WriteNeighboursRadiusHDF5
 
 
 
