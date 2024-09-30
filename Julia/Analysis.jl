@@ -1,14 +1,14 @@
 using GLMakie
 using HDF5
 
-NumIter = 2250
-NPart = 50000
+NumIter = 500
+NPart = 5000
 MarkerSizePlot = 2
 ArrowLengthPlot = 0.9
 
-R = h5read("./Fortran/HDF5Files/SaveFiles.h5", "SaveParams/R")
+R = h5read("./HDF5Files/SaveFiles.h5", "SaveParams/R")
 
-FilePath = "./Fortran/HDF5Files/SaveFiles.h5"
+FilePath = "./HDF5Files/SaveFiles.h5"
 
 SimulatedCoords = zeros(2, NPart, NumIter)
 SimulatedPolAng = zeros(NPart, NumIter)
