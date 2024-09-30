@@ -66,7 +66,7 @@ cd run
 
 The parameters read by the program will then be written to the screen.
 
-*** NOTE: *** Tl;dr: Delete the `SaveFiles.h5` before a new simulation. The Program does not delete the previous `SaveFiles.h5` file automatically, and can fail if e.g. the number of paricles change between runs, and the file is still present. Due to the nature of HDF5-files, if only the number of snapshots is reduced after a run, the program will run without errors, and the snapchots will be saved to the `SaveFiles.h5` file, but previous simulation snapshots will still exist in the file, and will not be written over. This can lead to weird results if more than one simulation's snapshots are analyzed.
+**NOTE:** Tl;dr: Delete the `SaveFiles.h5` before a new simulation. The Program does not delete the previous `SaveFiles.h5` file automatically, and can fail if e.g. the number of paricles change between runs, and the file is still present. Due to the nature of HDF5-files, if only the number of snapshots is reduced after a run, the program will run without errors, and the snapchots will be saved to the `SaveFiles.h5` file, but previous simulation snapshots will still exist in the file, and will not be written over. This can lead to weird results if more than one simulation's snapshots are analyzed.
 
 
 ## Creator and acknowledgements
