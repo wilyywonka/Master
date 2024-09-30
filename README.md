@@ -29,7 +29,7 @@ Start by cloning the repository to your local machine.
 
 ### Julia 
 
-Julia is downloaded and installed by following the steps presented in this \[link]{https://julialang.org/downloads/platform/}. The libraries used can be installed by using the julia package manager `Pkg`. For example, if we are to install the library `Plots.jl`
+Julia is downloaded and installed by following the steps presented in this [link](https://julialang.org/downloads/platform/). The libraries used can be installed by using the julia package manager `Pkg`. For example, if we are to install the library `Plots.jl`
 
 ```julia
 import Pkg
@@ -42,7 +42,7 @@ Pkg.add("Plots")
 
 The program is only currently tested using Linux Mint.
 
-To install and compile the Fortran code, there are a few prerequisites. The program uses the package \[h5fortran]{https://github.com/geospace-code/h5fortran} to easily read and write to HDF5-files. The installation of this is well documented on their GitHub page.
+To install and compile the Fortran code, there are a few prerequisites. The program uses the package [h5fortran](https://github.com/geospace-code/h5fortran) to easily read and write to HDF5-files. The installation of this is well documented on their GitHub page.
 
 To compile and use both this code and the h5fortran library, a few HDF5 libraries have to be installed and linked to as well, and the paths to these libraries are set in the `FortranXXXX/source/CMakeLists.txt`, where `FortranXXXX` indicates the three folders in the repository, Serial, Parallel and CUDA.
 
