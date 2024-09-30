@@ -29,7 +29,14 @@ Start by cloning the repository to your local machine.
 
 ### Julia 
 
-Julia is installed by following the steps presented in this 
+Julia is downloaded and installed by following the steps presented in this [link]{https://julialang.org/downloads/platform/}. The libraries used can be installed by using the julia package manager `Pkg`. For example, if we are to install the library `Plots.jl`
+
+```julia
+import Pkg
+
+Pkg.add("Plots")
+```
+
 
 ### Fortran
 
