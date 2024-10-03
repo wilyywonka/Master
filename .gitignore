@@ -13,11 +13,11 @@
 # Ignore the build directory
 Fortran/build/*
 
-# Ignore all files in the HDF5-Folder
-Fortran/HDF5Files/*
-
 # Ignore all png files
 *.png
 
 # Ignore all jld files
 *.jld
+
+# Ignore the local paths to libraries
+*/source/CMakeLists.txt
