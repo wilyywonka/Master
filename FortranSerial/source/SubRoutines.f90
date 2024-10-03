@@ -165,13 +165,25 @@ module SubRoutineModule
           ! Adding the repelling boundary force
           TotalForce = TotalForce + BoundaryRep(ParamAM,TmpCoords(:,iParticle), PartCentreRad)
         end if 
+      case ("NoBoundary")
+        ! Pass through
       case default
         print*, "Invalid boundary method!"
         stop
     end select
 
-    ! Calculating the torque using the TotalForce, as it per now only contains elastic force, and is thus the total elastic force
-    TotalTorque = PolarizationTorque(ParamAM,TotalForce,PolVec)
+    select case (ParamAM%PolarizationMethod)
+      case ("MotionDrivenPolarization")
+        ! Calculating the torque using the TotalForce, as it per now only contains elastic force, and is thus the total elastic force
+        TotalTorque = MotionPolarizationTorque(ParamAM,TotalForce,PolVec)
+      case ("EnergyDrivenPolarization")
+        ! Calculating the torque using the energy, like is done in the XY model
+        TotalTorque = EnergyPolarizationTorque(ParamAM,Neighbours(iParticle),TmpPolAng,iParticle)
+      case default
+        print*, "Invalid boundary method!"
+        stop
+    end select
+    
 
     ! Adding on the polarization force, to the elastic forces to produce the total force and dividing by zeta to get the "velocity"
     TotalForce = (TotalForce + PolarizationForce(ParamAM,PolVec))/ParamAM%zeta
@@ -213,7 +225,6 @@ module SubRoutineModule
     BoundForce = -(ProxLength/PartCentreRad)*TmpPartCoords*ParamAM%kBoundary
    
   end function BoundaryRep
-
 
   function LinearElasticForce(ParamAM, TmpCoords, iPart, Neighbour, iNeigh) result(ElForce)
     implicit none
@@ -303,7 +314,7 @@ module SubRoutineModule
 
   end function 
 
-  function PolarizationTorque(ParamAM,ElasticForce,PolVec) result(PolTorque)
+  function MotionPolarizationTorque(ParamAM,ElasticForce,PolVec) result(PolTorque)
     implicit none
     !Input
     type(ParamType), intent(in) :: ParamAM
@@ -316,6 +327,34 @@ module SubRoutineModule
     NormPolVec = (/-PolVec(2),PolVec(1)/)
 
     PolTorque = ParamAM%xi * dot_product(ElasticForce,NormPolVec)
+
+  end function
+
+  function EnergyPolarizationTorque(ParamAM,Neighbours,TmpPolAng,iPart) result(PolTorque)
+    implicit none
+    ! Input
+    type(ParamType), intent(in) :: ParamAM
+    type(NeighbourType), intent(in) :: Neighbours
+    real(wpf), dimension(:), intent(in) :: TmpPolAng
+    integer(wpi), intent(in) :: iPart
+    ! Allocate
+    integer(wpi) :: iNeighbourPol
+    real(wpf) :: sinPart, cosPart
+    ! Output
+    real(wpf) :: PolTorque
+
+    PolTorque = 0_wpf
+
+    sinPart = sin(TmpPolAng(iPart))
+    cosPart = cos(TmpPolAng(iPart))
+
+
+    do iNeighbourPol = 1, Neighbours%NumNeighbours
+      PolTorque = PolTorque - sinPart*cos(TmpPolAng(Neighbours%SpecificNeighbours(iNeighbourPol))) &
+        + cosPart*sin(TmpPolAng(Neighbours%SpecificNeighbours(iNeighbourPol)))
+    end do
+
+    PolTorque = PolTorque*ParamAM%J
 
   end function
 

@@ -46,7 +46,8 @@ The compillation and execution of the Fortran code is only currently tested usin
 
 To install and compile the Fortran code, there are a few prerequisites. The program uses the library [h5fortran](https://github.com/geospace-code/h5fortran) to easily read and write to HDF5-files. The installation of this is well documented on their GitHub page.
 
-To compile and use both this code and the h5fortran library, a few HDF5 libraries have to be installed and linked to as well, and the paths to these libraries are set in the `FortranXXXX/source/CMakeLists.txt` file, where `FortranXXXX` indicates the three folders in the repository, Serial, Parallel and CUDA.
+To compile and use both this code and the h5fortran library, a few HDF5 libraries have to be installed and linked to as well, and the paths to these libraries needs to be set up. In the file located at `FortranXXXX/source/CMakeListsTemplate.txt` there are multiple places where the placeholder text `!FILL!` is written. Here the path to the relevant library must be written in place of the placeholder `!FILL!`, before renaming the file to `FortranXXXX/source/CMakeLists.txt`, where `FortranXXXX` indicates the three folders in the repository, Serial, Parallel and CUDA.
+(The template was made such that the machine specific paths were not set, as to avoid confusion.)
 
 After correcting these paths the program can be compiled. CMake is chosen as the compilation tool and the program can be compiled by executing
 
@@ -66,16 +67,21 @@ cd run
 ./ActiveSolidsSimulation
 ```
 
-The parameters read by the program will then be written to the screen.
+The parameters read by the program will then be written to the screen, and the result will be written to the HDF5-file with the specified savefile name.
 
-**NOTE:** *Tl;dr: Delete the `SaveFiles.h5` before a new simulation.* The Program does not delete the previous `SaveFiles.h5` file automatically, and can fail if e.g. the number of paricles change between runs, and the file is still present. Due to the nature of HDF5-files, if only the number of snapshots is reduced after a run, the program will run without errors, and the snapchots will be saved to the `SaveFiles.h5` file, but previous simulation snapshots will still exist in the file, and will not be written over. This can lead to weird results if more than one simulation's snapshots are analyzed.
+### A note on HDF5-files
+*Tl;dr: If the same file name is multiple times to save a HDF5 file, like `SaveFiles.h5`, delete the existing file before a new simulation.*
+
+When choosing a filename for the file containing the snapshots, the program does not delete existing files with the same name. It will instead partially write over this file, due to the nature of HDF5-files. 
+This can lead to two main problems, with the first being that the program can crash if e.g. the number of paricles change between runs, and the file is still present. The reason is that the program will attempt to write over an array that already exists, but as the dimensions now have changed, the operation will fail.
+The second can occur when only the number of snapshots is reduced between two runs. The program will run without errors, and the snapchots will be saved to the savefile. The problem is that as it is now overwriting existing arrays, the previous simulation snapshots will still exist. This will lead to incorrect results if the analysis attempts to analyze both the current snapshots, and some left over snapshots from a previous run.
 
 
 ## Creator and acknowledgements
 
 This software was created by Wilhelm Sunde Lie as a part of the Master's Thesis in Physics at NTNU
 
-My thanks goes to to my supervisor Prof. Paul Gunnar Dommersnes for a lot of the physics related questions, and to my co-supervisor Prof. Ingve Simonsen for a lot of the programming/Fortran/compilation questions.
+My thanks go to my supervisor Prof. Paul Gunnar Dommersnes for a lot of the physics related questions, and to my co-supervisor Prof. Ingve Simonsen for a lot of the programming/Fortran/compilation questions.
 
 ## License
 This project is licensed under the [MIT License](https://choosealicense.com/licenses/mit/).

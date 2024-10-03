@@ -6,8 +6,8 @@ module TypeModule
   type :: ParamType
 
     integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
-    real(wpf) :: zeta, xi, Fa, k, deltaT, A, R, b, kBoundary, pi, kNonLin
-    character(len = :), allocatable :: SaveFileName, IterMethod, BaseDirName, BoundaryMethod, ElasticityMethod
+    real(wpf) :: zeta, xi, Fa, k, deltaT, A, R, b, kBoundary, pi, kNonLin, J
+    character(len = :), allocatable :: SaveFileName, IterMethod, BaseDirName, BoundaryMethod, ElasticityMethod, PolarizationMethod
 
   end type ParamType
 
@@ -166,13 +166,13 @@ module TypeModule
   
     ! Allocate
     integer(wpi) :: NumPart, MaxNeighbour, NumTimeSteps, SaveEvery
-    real(wpf) :: zeta, xi, Fa, k, deltaT, b, kBoundary, kNonLin
-    character(len=100) :: InitFileName, SaveFileName, IterMethod, BaseDirName, BoundaryMethod, ElasticityMethod
+    real(wpf) :: zeta, xi, Fa, k, deltaT, b, kBoundary, kNonLin, J
+    character(len=100) :: InitFileName, SaveFileName, IterMethod, BaseDirName, BoundaryMethod, ElasticityMethod, PolarizationMethod
     integer(wpi) :: fu, rc
   
     ! Namelist definition.
     namelist /Parameters/ NumPart, NumTimeSteps, MaxNeighbour, SaveEvery, zeta, xi, Fa, b, k, kBoundary, deltaT, IterMethod, &
-      InitFileName, SaveFileName, BaseDirName, BoundaryMethod, kNonLin, ElasticityMethod
+      InitFileName, SaveFileName, BaseDirName, BoundaryMethod, kNonLin, ElasticityMethod, PolarizationMethod, J
     
     
     ! Open and read Namelist file.
@@ -197,13 +197,14 @@ module TypeModule
     ParamAM%kNonLin = kNonLin
     ParamAM%kBoundary = kBoundary
     ParamAM%deltaT = deltaT
+    ParamAM%J = J
     ParamAM%SaveEvery = SaveEvery
     ParamAM%IterMethod = trim(IterMethod)
     ParamAM%SaveFileName = trim(SaveFileName)
     ParamAM%BaseDirName = trim(BaseDirName)
     ParamAM%BoundaryMethod = trim(BoundaryMethod)
     ParamAM%ElasticityMethod = trim(ElasticityMethod)
-
+    ParamAM%PolarizationMethod = trim(PolarizationMethod)
     ! Print parameters
     write(*,"(a)") "----------------------------------------------------------------------"
     write(*,"(a)") "Parameters have been read, the following parameters have been set."
@@ -219,12 +220,14 @@ module TypeModule
     write(*,"(a,g0)") "k - Inter particle, NonLinear: - - - - - - ", kNonLin
     write(*,"(a,g0)") "k - Boundary:- - - - - - - - - - - - - - - ", kBoundary
     write(*,"(a,g0)") "DeltaT:- - - - - - - - - - - - - - - - - - ", deltaT
+    write(*,"(a,g0)") "J: - - - - - - - - - - - - - - - - - - - - ", J
     write(*,"(a,g0)") "Iteration method:- - - - - - - - - - - - - ", IterMethod
     write(*,"(a,g0)") "Filename of initial system configuration:- ", InitSetup%InitSetupFileName
     write(*,"(a,g0)") "Filename of savefile:- - - - - - - - - - - ", ParamAM%SaveFileName
     write(*,"(a,g0)") "HDF5 base directory: - - - - - - - - - - - ", ParamAM%BaseDirName
     write(*,"(a,g0)") "Boundary method: - - - - - - - - - - - - - ", ParamAM%BoundaryMethod
     write(*,"(a,g0)") "Elasticity method: - - - - - - - - - - - - ", ParamAM%ElasticityMethod
+    write(*,"(a,g0)") "Polarization method: - - - - - - - - - - - ", ParamAM%PolarizationMethod
     write(*,"(a)") "----------------------------------------------------------------------"
     
   end subroutine ReadNamelist
@@ -283,7 +286,7 @@ module TypeModule
 
 
 
-  subroutine WriteNeighboursRadiusHDF5(ParamAM, InitSetup)
+  subroutine WriteInitialValsHDF5(ParamAM, InitSetup)
     implicit none
 
     ! Input
@@ -303,7 +306,7 @@ module TypeModule
     call h5write(ParamAM%SaveFileName,trim(DirNameR), ParamAM%R)
 
 
-  end subroutine WriteNeighboursRadiusHDF5
+  end subroutine WriteInitialValsHDF5
 
 
 

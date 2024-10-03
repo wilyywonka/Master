@@ -1,11 +1,12 @@
 &Parameters
-    NumPart = 5000
-    NumTimeSteps = 5000
-    SaveEvery = 10
+    NumPart = 10000
+    NumTimeSteps = 20000
+    SaveEvery = 20
     MaxNeighbour = 8
     k = 60.0
     kNonLin = 60.0
     kBoundary = 20.0
+    J = 1.0
     xi = 3.0
     zeta = 1.0
     Fa = 1.0
@@ -15,6 +16,7 @@
     BaseDirName = "/SaveParams"
     InitFileName = "../../../HDF5Files/InitState.h5"
     SaveFileName = "../../../HDF5Files/SaveFiles.h5"
-    BoundaryMethod = "RepellingBoundary"
+    BoundaryMethod = "NoBoundary"
     ElasticityMethod = "LinearElasticity"
+    PolarizationMethod = "MotionDrivenPolarization"
 /

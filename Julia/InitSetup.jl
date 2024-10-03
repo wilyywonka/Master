@@ -5,9 +5,9 @@ using HDF5
 
 # ---------------------------------------------------------------
 # SET PARAMETERS - SIMULATION -
-NPart::Int64 = 5000
-NSimulationIterations::Int64 = 5000
-SaveEverySimulation::Int64 = 10
+NPart::Int64 = 1000
+NSimulationIterations::Int64 = 7000
+SaveEverySimulation::Int64 = 7
 kSimulation::Float64 = 60.0
 kNonLin::Float64 = 60.0
 kBoundarySimulation::Float64 = 20.0
@@ -16,13 +16,15 @@ zetaSimulation::Float64 = 1.0
 FaSimulation::Float64 = 1.0
 b::Float64 = 0.3
 deltaTSimulation::Float64 = 0.001
+J::Float64 = 1
 IterMethodSimulation::String = "RK4"
 BaseDirName::String = "/SaveParams"
 FileName::String = "InitState.h5"
 InitFileName::String = "../../../HDF5Files/"*FileName
 SaveFileName::String = "../../../HDF5Files/SaveFiles.h5"
-BoundaryMethodSimulation::String = "RepellingBoundary" #RepellingBoundary : AttractiveRepellingBoundary
-ElasticityMethod::String = "LinearElasticity" #LinearElasticity : NonLinearElasticity : FENEElasticity
+BoundaryMethodSimulation::String = "NoBoundary" # NoBoundary : RepellingBoundary : AttractiveRepellingBoundary
+ElasticityMethod::String = "LinearElasticity" # LinearElasticity : NonLinearElasticity : FENEElasticity
+PolarizationMethod::String = "MotionDrivenPolarization" # MotionDrivenPolarization : EnergyDrivenPolarization
 
 
 # SET PARAMETERS - SAVE -
@@ -51,6 +53,9 @@ PlotEnd::Bool = false
 CirclePlot::Bool = false
 DelaunayPlot::Bool = false
 NeighbourPlot::Bool = false
+
+# SET PARAMETERS - OPERATION -
+InitSystem::Bool = false
 
 # ---------------------------------------------------------------
 
@@ -109,18 +114,6 @@ function AttractiveRepellingBoundary!(Coords::Matrix{Float64}, BoundaryForce::Ma
     end
     return nothing
 end
-
-# function InitCloseParticles!(CloseParticlesArray::Vector{Vector{Int64}}, NPart::Int64)
-#     for i in 1:NPart
-#         push!(CloseParticlesArray,zeros(Int64,1))
-#     end
-#     return nothing
-# end
-
-# function CloseParticles!(CloseParticlesArray::Vector{Vector{Int64}}, IndexVec::Vector{Int64}, CoordArray::Array{Float64}, iOld::Int64, radArray::Vector{Float64}, iParticle::Int64)
-#     CloseParticlesArray[iParticle] = IndexVec[1:end .!= iParticle][findall((CoordArray[1,1:end .!= iParticle,iOld].-CoordArray[1,iParticle,iOld]).^2 .+ (CoordArray[2,1:end .!= iParticle,iOld].-CoordArray[2,iParticle,iOld]).^2 .< (radArray[1:end .!= iParticle].+radArray[iParticle]).^2)]
-#     return nothing
-# end
 
 function InitNeighbours(NeighbourCount::Matrix{Int64}, NCells::Int64, CoordArrayShift::Matrix{Float64},l::Float64,DivVec::Vector{Float64},ExtraSlots::Int64)
     iCell::Int64 = 0
@@ -297,97 +290,6 @@ function CalcNextStep!(CoordArray::Array{Float64},iNew::Int64,iOld::Int64,forceV
     end
 end
 
-# NPart = 1000000
-# iOld = 1
-# finalMeanRad = 1
-# ρ = 1
-# CoordArray::Array{Float64} = zeros(2,NPart,2)
-# R::Float64 = sqrt((NPart*(finalMeanRad)^2)/(ρ))
-# randAngle::Vector{Float64} = zeros(NPart)
-# randRadius::Vector{Float64} = zeros(NPart)
-
-# InitCoords!(CoordArray,NPart,R,iOld,randAngle,randRadius)
-
-# using Plots
-# using BenchmarkTools
-
-# #scatter(CoordArray[1,:,1],CoordArray[2,:,1],size=(900,900))
-
-# MoveMultiplier = 1.2
-
-# CoordArrayShift::Matrix{Float64} = zeros(2,NPart)
-
-# CoordArrayShift = view(CoordArray,:,:,iOld) .+ MoveMultiplier*R
-
-
-# GridSpan = [0,2*MoveMultiplier*R]
-# NCells = Int(floor((GridSpan[2]-GridSpan[1])/(2*1.15)))
-
-# xVec = LinRange(GridSpan[1],GridSpan[2],NCells + 1)
-# yVec = LinRange(GridSpan[1],GridSpan[2],NCells + 1)
-
-# l::Float64 = xVec[2]-xVec[1]
-
-# #scatter(CoordArrayShift[1,:,1],CoordArrayShift[2,:,1],size=(900,900))
-# #hline!(yVec)
-# #vline!(xVec)
-
-# testmat = rand(3,4)
-# Testmat2 = reshape(1:24,(3,4,2))
-
-# for (i,v) in pairs(testmat)
-#     a = [getindex(i,1),getindex(i,2)]
-# end
-
-# @benchmark eachslice(CoordArray[:,:,iOld], dims= 2)
-
-
-# function Tester1(CoordArray,iOld)
-#     sliced = eachslice(CoordArray[:,:,iOld], dims= 2)
-#     DivVec::Matrix{Float64} = zeros(2,1000000)
-#     DivVecTester = deepcopy(DivVec)
-#     a::Vector{Float64} = zeros(1000000)
-#     for (i,vec) in enumerate(sliced)
-#         @inbounds @view(DivVec[:,i]) .= vec.^2
-#         @inbounds @view(a[i]) .= sqrt(sum(@view(DivVec[:,i])[1]))
-#     end
-#     return a
-# end
-
-
-# @benchmark Tester1(CoordArray,iOld)
-# @profview Tester1(CoordArray,iOld)
-
-
-# eachslice(testmat; dims=1)
-
-# NeighbourCount::Matrix{Int64} = zeros(Int64,NCells,NCells)
-# NeighbourCount2::Matrix{Int64} = zeros(Int64,NCells,NCells)
-
-# #@benchmark NeighbourCount .= 0
-
-# Vec::Vector{Float64} = zeros(2)
-# DivVec::Vector{Float64} = zeros(2)
-
-
-
-# #@time InitNeighbours!(zeros(Int64,2,2),NeighbourCount,zeros(Int64,2),CoordArrayShift,NCells,l)
-# #@profview InitNeighbours2!(zeros(Int64,2,2),NeighbourCount2,zeros(Int64,2),CoordArrayShift[:,:,iOld],l,DivVec)
-# NeighbourIdx, MaxPart = InitNeighbours(NeighbourCount2,NCells,CoordArrayShift[:,:,iOld],l,DivVec,5)
-# CoordArrayShift .-= 50
-
-# UpdateNeighbours!(NeighbourIdx,NeighbourCount2,NCells,CoordArrayShift,l,DivVec,MaxPart,ExtraSlots)
-# typeof(CoordArrayShift[:,:,iOld])
-# heatmap(NeighbourIdx[7,:,:],size = (1000, 900))
-# heatmap(NeighbourCount2,size = (1000, 900))
-
-# ceil((l/0.85)^2)
-# @benchmark maximum(NeighbourCount2)
-
-a= abs.(rand(2,5))
-bT = collect(enumerate(eachslice(a,dims=2)))
-
-
 function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Float64},finalMeanRad::Float64,growSize::Float64,NTimeSteps::Int64,Extrasteps::Int64, ExtraSlots::Int64, MoveMultiplier::Float64, 
                             A::Float64,dt::Float64,BrownianMethod!::Function,BoundaryMethod!::Function,b::Float64,save::Bool)
 
@@ -541,33 +443,6 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
         end
     end
 
-
-
-    # CircleArray = zeros(2,100)
-    # PhiCirc = LinRange(0,2*pi,100)
-    # CircleArray[1,:] = R*cos.(PhiCirc)
-    # CircleArray[2,:] = R*sin.(PhiCirc)
-
-
-    # function circle(x, y, r=1; n=30)
-    #     θ = 0:360÷n:360
-    #     Plots.Shape(r*sind.(θ) .+ x, r*cosd.(θ) .+ y)
-    # end
-
-
-    # # TimeHop = 400
-    # # i = 1
-    # circles = circle.(CoordArray[1,:,iOld],CoordArray[2,:,iOld],radArray[:])
-
-
-    # plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
-    #     color=:black, grid=false)
-
-
-    # aPlot =  Plots.plot(circles; plot_kwargs...)
-    # Plots.plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
-    # display(aPlot)
-
     # Return
     if save
         return SaveCoordArray, SaveRadArray, R
@@ -593,9 +468,9 @@ using BenchmarkTools
 # ----------------------------------------------------------------------------------------------------------------------------
 # CALC INITIAL VALS #
 # ----------------------------------------------------------------------------------------------------------------------------
-
-@time SaveCoordArray, SaveRadArray,R = InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, false)
-
+if InitSystem
+    @time SaveCoordArray, SaveRadArray,R = InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, false)
+end
 
 # NumberParticles = [10,30,60,100,300,600,1000,3000,6000,10000,20000,30000,40000,50000,60000]
 # timeTaken = zeros(length(NumberParticles))
@@ -625,20 +500,23 @@ using BenchmarkTools
 # ----------------------------------------------------------------------------------------------------------------------------
 # DELAUNAY #
 # ----------------------------------------------------------------------------------------------------------------------------
-points = zeros(size(transpose(SaveCoordArray[:,:])))
+function DelaunayNeighbours(SaveCoordArray, NPart)
+    points = zeros(size(transpose(SaveCoordArray[:,:])))
 
-points += transpose(SaveCoordArray[:,:])
+    points += transpose(SaveCoordArray[:,:])
 
-mesh = delaunay(points)
+    mesh = delaunay(points)
 
-IndexList = 1:NPart
-NumNeighbours = zeros(Int,NPart)
-for iParticle in 1:NPart
-    NumNeighbours[iParticle] = length(IndexList[mesh.vertex_neighbor_vertices[iParticle,:]])
-end
-NeighbourMatrix = zeros(Int,maximum(NumNeighbours),NPart)
-for iParticle in 1:NPart
-    NeighbourMatrix[1:NumNeighbours[iParticle],iParticle] = IndexList[mesh.vertex_neighbor_vertices[iParticle,:]]
+    IndexList = 1:NPart
+    NumNeighbours = zeros(Int,NPart)
+    for iParticle in 1:NPart
+        NumNeighbours[iParticle] = length(IndexList[mesh.vertex_neighbor_vertices[iParticle,:]])
+    end
+    NeighbourMatrix = zeros(Int,maximum(NumNeighbours),NPart)
+    for iParticle in 1:NPart
+        NeighbourMatrix[1:NumNeighbours[iParticle],iParticle] = IndexList[mesh.vertex_neighbor_vertices[iParticle,:]]
+    end
+    return NumNeighbours, NeighbourMatrix
 end
 # ----------------------------------------------------------------------------------------------------------------------------
 
@@ -646,23 +524,28 @@ end
 # ----------------------------------------------------------------------------------------------------------------------------
 # HDF5 #
 # ----------------------------------------------------------------------------------------------------------------------------
-FullPath = PathName*FileName
+function WriteHDF5(PathName,FileName,SaveCoordArray,NPart,NeighbourMatrix,R,NumNeighbours)
 
-fid = h5open(FullPath,"w")
+    FullPath = PathName*FileName
 
-h5File = create_group(fid, "InitGroup")
+    fid = h5open(FullPath,"w")
 
-h5File["Coords"] = SaveCoordArray[:,:]
+    h5File = create_group(fid, "InitGroup")
 
-h5File["PolAng"] = rand(NPart)*2*pi
+    h5File["Coords"] = SaveCoordArray[:,:]
 
-h5File["NeighbourMatrix"] = NeighbourMatrix
+    h5File["PolAng"] = rand(NPart)*2*pi
 
-h5File["R"] = R
+    h5File["NeighbourMatrix"] = NeighbourMatrix
 
-h5File["MaxNeighbour"] = maximum(NumNeighbours)
+    h5File["R"] = R
 
-close(fid)
+    h5File["MaxNeighbour"] = maximum(NumNeighbours)
+
+    close(fid)
+
+    return nothing
+end
 # ----------------------------------------------------------------------------------------------------------------------------
 
 
@@ -670,32 +553,46 @@ close(fid)
 # ----------------------------------------------------------------------------------------------------------------------------
 # PARAMETERFILE #
 # ----------------------------------------------------------------------------------------------------------------------------
-open(NameListPath,"w") do ParameterFile
-    println(ParameterFile, "&Parameters")
-    println(ParameterFile, "    NumPart = "*string(NPart))
-    println(ParameterFile, "    NumTimeSteps = "*string(NSimulationIterations))
-    println(ParameterFile, "    SaveEvery = "*string(SaveEverySimulation))
-    println(ParameterFile, "    MaxNeighbour = "*string(maximum(NumNeighbours)))
-    println(ParameterFile, "    k = "*string(kSimulation))
-    println(ParameterFile, "    kNonLin = "*string(kNonLin))
-    println(ParameterFile, "    kBoundary = "*string(kBoundarySimulation))
-    println(ParameterFile, "    xi = "*string(xiSimulation))
-    println(ParameterFile, "    zeta = "*string(zetaSimulation))
-    println(ParameterFile, "    Fa = "*string(FaSimulation))
-    println(ParameterFile, "    b = "*string(b))
-    println(ParameterFile, "    deltaT = "*string(deltaTSimulation))
-    println(ParameterFile, "    IterMethod = "*"\""*IterMethodSimulation*"\"")
-    println(ParameterFile, "    BaseDirName = "*"\""*BaseDirName*"\"")
-    println(ParameterFile, "    InitFileName = "*"\""*InitFileName*"\"")
-    println(ParameterFile, "    SaveFileName = "*"\""*SaveFileName*"\"")
-    println(ParameterFile, "    BoundaryMethod = "*"\""*BoundaryMethodSimulation*"\"")
-    println(ParameterFile, "    ElasticityMethod = "*"\""*ElasticityMethod*"\"")
-    println(ParameterFile, "/")
+function WriteParameterFile(NameListPath,NPart,NSimulationIterations,SaveEverySimulation,NumNeighbours,kSimulation,kNonLin,kBoundarySimulation,J,xiSimulation,zetaSimulation,FaSimulation,b,deltaTSimulation,
+    IterMethodSimulation,BaseDirName,InitFileName,SaveFileName,BoundaryMethodSimulation,ElasticityMethod,PolarizationMethod)
+
+    open(NameListPath,"w") do ParameterFile
+        println(ParameterFile, "&Parameters")
+        println(ParameterFile, "    NumPart = "*string(NPart))
+        println(ParameterFile, "    NumTimeSteps = "*string(NSimulationIterations))
+        println(ParameterFile, "    SaveEvery = "*string(SaveEverySimulation))
+        println(ParameterFile, "    MaxNeighbour = "*string(maximum(NumNeighbours)))
+        println(ParameterFile, "    k = "*string(kSimulation))
+        println(ParameterFile, "    kNonLin = "*string(kNonLin))
+        println(ParameterFile, "    kBoundary = "*string(kBoundarySimulation))
+        println(ParameterFile, "    J = "*string(J))
+        println(ParameterFile, "    xi = "*string(xiSimulation))
+        println(ParameterFile, "    zeta = "*string(zetaSimulation))
+        println(ParameterFile, "    Fa = "*string(FaSimulation))
+        println(ParameterFile, "    b = "*string(b))
+        println(ParameterFile, "    deltaT = "*string(deltaTSimulation))
+        println(ParameterFile, "    IterMethod = "*"\""*IterMethodSimulation*"\"")
+        println(ParameterFile, "    BaseDirName = "*"\""*BaseDirName*"\"")
+        println(ParameterFile, "    InitFileName = "*"\""*InitFileName*"\"")
+        println(ParameterFile, "    SaveFileName = "*"\""*SaveFileName*"\"")
+        println(ParameterFile, "    BoundaryMethod = "*"\""*BoundaryMethodSimulation*"\"")
+        println(ParameterFile, "    ElasticityMethod = "*"\""*ElasticityMethod*"\"")
+        println(ParameterFile, "    PolarizationMethod = "*"\""*PolarizationMethod*"\"")
+        println(ParameterFile, "/")
+    end
+
+    return nothing
 end
+
 # ----------------------------------------------------------------------------------------------------------------------------
+if InitSystem
+    NumNeighbours, NeighbourMatrix = DelaunayNeighbours(SaveCoordArray, NPart)
 
+    WriteHDF5(PathName,FileName,SaveCoordArray,NPart,NeighbourMatrix,R,NumNeighbours)
 
-
+    WriteParameterFile(NameListPath,NPart,NSimulationIterations,SaveEverySimulation,NumNeighbours,kSimulation,kNonLin,kBoundarySimulation,J,xiSimulation,zetaSimulation,FaSimulation,b,deltaTSimulation,
+        IterMethodSimulation,BaseDirName,InitFileName,SaveFileName,BoundaryMethodSimulation,ElasticityMethod,PolarizationMethod)
+end
 #--------------------------------------------------------------------------------------------------------
 # Plotting
 #--------------------------------------------------------------------------------------------------------
