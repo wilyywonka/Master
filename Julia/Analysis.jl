@@ -1,36 +1,37 @@
 using GLMakie
+using Statistics
 using HDF5
 
-NumIter::Int64 = 1000
-NPart::Int64 = 1000
+NumIter::Int64 = 1428
+NPart::Int64 = 10000
 MarkerSizePlot::Int64 = 2
 ArrowLengthPlot::Float64 = 0.9
 
-FilePath::String = "./HDF5Files/SaveFiles.h5"
+FilePath::String = "./HDF5Files/SaveFiles2.h5"
 
-NormPlot::Bool = false
+NormPlot::Bool = true
 DiffPlot::Bool = false
-QuivPolPlot::Bool = false
+QuivPolPlot::Bool = true
 ColPlot::Bool = false
 
-PolOrderAnalysis::Bool = true
+PolOrderAnalysis::Bool = false
 
 if NormPlot|DiffPlot|QuivPolPlot|ColPlot
 
     R = h5read("./HDF5Files/SaveFiles.h5", "SaveParams/R")
 
 
-    SimulatedCoords = zeros(2, NPart, NumIter)
-    SimulatedPolAng = zeros(NPart, NumIter)
-    SimulatedDisplacement = zeros(2, NPart, NumIter)
+    SimulatedCoords6 = zeros(2, NPart, NumIter)
+    SimulatedPolAng6 = zeros(NPart, NumIter)
+    SimulatedDisplacement6 = zeros(2, NPart, NumIter)
 
     for i in 1:NumIter
         println("Reading: ", "SaveParams/Coords/"*string(i))
-        SimulatedCoords[:,:,i]       = h5read(FilePath, "SaveParams/Coords/"*string(i))
+        SimulatedCoords6[:,:,i]       = h5read(FilePath, "SaveParams/Coords/"*string(i))
         println("Reading: ", "SaveParams/PolAng/"*string(i))
-        SimulatedPolAng[:,i]         = h5read(FilePath, "SaveParams/PolAng/"*string(i))
+        SimulatedPolAng6[:,i]         = h5read(FilePath, "SaveParams/PolAng/"*string(i))
         println("Reading: ", "SaveParams/Displacement/"*string(i))
-        SimulatedDisplacement[:,:,i]   = h5read(FilePath, "SaveParams/Displacement/"*string(i))
+        SimulatedDisplacement6[:,:,i]   = h5read(FilePath, "SaveParams/Displacement/"*string(i))
     end
 
 
@@ -40,6 +41,16 @@ if NormPlot|DiffPlot|QuivPolPlot|ColPlot
     CircleArray[2,:] = R*sin.(PhiCirc)
 
 end
+#1GNU noopti, 2ifort ,Noopti, 3ifx ,Noopti, 4ifx ,opti, 5GNU -opti, 6ifx-opt again
+using Plots
+A = Plots.plot(abs.(SimulatedCoords[1,224,1:100].-SimulatedCoords2[1,224,1:100]),size=(1000,800),label="GNU -noopti, ifort -noopti")
+Plots.plot!(abs.(SimulatedCoords[1,224,1:100].-SimulatedCoords3[1,224,1:100]),label="GNU -noopti, ifx -noopti")
+Plots.plot!(abs.(SimulatedCoords[1,224,1:100].-SimulatedCoords5[1,224,1:100]),label="GNU -noopti, GNU -opti")
+Plots.plot!(abs.(SimulatedCoords3[1,224,1:100].-SimulatedCoords2[1,224,1:100]),label="ifx -noopti, ifort -noopti")
+Plots.plot!(abs.(SimulatedCoords3[1,224,1:100].-SimulatedCoords4[1,224,1:100]),label="ifx -noopti, ifx -opti")
+Plots.plot!(abs.(SimulatedCoords6[1,224,1:100].-SimulatedCoords4[1,224,1:100]),label="ifx -opti, ifx -opti")
+title!("Errors between compilers and settings")
+savefig(A,"ErrorCompilerPlot.png")
 
 if NormPlot
 
@@ -119,6 +130,8 @@ if QuivPolPlot
     PartPolDiff = @lift angularChange(SimulatedPolAng[:,($iPlotQuivCol-1)],SimulatedPolAng[:,$iPlotQuivCol])
     ArrowDispDat = @lift Vec2f.(ArrowLengthPlot*SimulatedDisplacement[1,:,$iPlotQuivCol],ArrowLengthPlot*SimulatedDisplacement[2,:,$iPlotQuivCol])
     axQuivCol = Axis(figQuivCol[1, 1])
+
+    cmap = :matter
 
     GLMakie.scatter!(axQuivCol, PartPointDat,color=PartPolDiff,colormap = cmap,markersize = 7,label="Pol. Turn rate")
     GLMakie.lines!(axQuivCol,CircleArray[1,:],CircleArray[2,:],color="green",label="Border")
@@ -211,7 +224,7 @@ if PolOrderAnalysis
             end
 
             # Make initial system
-            @time SaveCoordArray, SaveRadArray,R = InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, false)
+            @time SaveCoordArray, SaveRadArray,R = InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b,SecondHeatingSteps,SecondHeatingDecrease)
 
             # Define neighbours
             NumNeighbours, NeighbourMatrix = DelaunayNeighbours(SaveCoordArray, NPart)
@@ -254,12 +267,13 @@ if PolOrderAnalysis
     OrderFig = Figure(size = (950,800))
     axOrder = Axis(OrderFig[1,1])
 
-    for i in 1:NumCycles
+    for i in 1:10
         if i == 1
-            GLMakie.lines!(axOrder,1:NumIter,OrderArray[:,1,1],color="blue",label="N=1250")
+            GLMakie.lines!(axOrder,1:NumIter,OrderArray[:,1,1],color="blue",label="N=1500")
             GLMakie.lines!(axOrder,1:NumIter,OrderArray[:,1,2],color="red",label="N=2500")
             GLMakie.lines!(axOrder,1:NumIter,OrderArray[:,1,3],color="green",label="N=5000")
             GLMakie.lines!(axOrder,1:NumIter,OrderArray[:,1,4],color="black",label="N=10000")
+            GLMakie.lines!(axOrder,1:NumIter,OrderArray[:,1,5],color="black",label="N=20000")
             OrderFig[1, 2] = GLMakie.Legend(OrderFig,axOrder)
         end
         GLMakie.lines!(axOrder,1:NumIter,OrderArray[:,i,1],color="blue")
@@ -287,6 +301,11 @@ end
 
 # WriteOrderHDF5("OrderFile.h5",OrderArray,[1500,2500,5000,10000],NumIter)
 
+
+OrderArray = h5read("./OrderFileLonger.h5", "OrderGroup/OrderArray")
+NumParticlesList = h5read("./OrderFileLonger.h5", "OrderGroup/NumPart")
+NumIterList = h5read("./OrderFileLonger.h5", "OrderGroup/NumIter")
+
 summedOrder = zeros(NumIter,length(NumParticlesList))
 for i in 1:length(NumParticlesList)
     for j in 1:NumIter
@@ -300,14 +319,38 @@ OrderFigMean = Figure(size = (950,800))
 axOrderMean = Axis(OrderFigMean[1,1])
 
 
-GLMakie.lines!(axOrderMean,1:NumIter,summedOrder[:,1],color="blue",label="N=1250")
+GLMakie.lines!(axOrderMean,1:NumIter,summedOrder[:,1],color="blue",label="N=1500")
 GLMakie.lines!(axOrderMean,1:NumIter,summedOrder[:,2],color="red",label="N=2500")
 GLMakie.lines!(axOrderMean,1:NumIter,summedOrder[:,3],color="green",label="N=5000")
 GLMakie.lines!(axOrderMean,1:NumIter,summedOrder[:,4],color="black",label="N=10000")
+GLMakie.lines!(axOrderMean,1:NumIter,summedOrder[:,5],color="orange",label="N=20000")
 OrderFigMean[1, 2] = GLMakie.Legend(OrderFigMean,axOrderMean)
 
 display(OrderFigMean)
-# GLMakie.lines(1:NumIter,summedOrder[:,1],color="blue",label="N=1250")
-# GLMakie.lines!(1:NumIter,summedOrder[:,2],color="red",label="N=2500")
-# GLMakie.lines!(1:NumIter,summedOrder[:,3],color="green",label="N=5000")
-# GLMakie.lines!(1:NumIter,summedOrder[:,4],color="black",label="N=10000")
+
+α = Observable(1.0)
+
+GLMakie.activate!(inline = false,focus_on_show=false)
+OrderFigMean = Figure(size = (950,800))
+axOrderMean = Axis(OrderFigMean[1,1])
+
+
+
+NumIter1 = @lift (collect(1:NumIter).*0.001)./(NumParticlesList[1]^$α)
+NumIter2 = @lift (collect(1:NumIter).*0.001)./(NumParticlesList[2]^$α)
+NumIter3 = @lift (collect(1:NumIter).*0.001)./(NumParticlesList[3]^$α)
+NumIter4 = @lift (collect(1:NumIter).*0.001)./(NumParticlesList[4]^$α)
+NumIter5 = @lift (collect(1:NumIter).*0.001)./(NumParticlesList[5]^$α)
+
+#GLMakie.lines!(axOrderMean,NumIter1,summedOrder[:,1],color="blue",label="N=1500")
+#GLMakie.lines!(axOrderMean,NumIter2,summedOrder[:,2],color="red",label="N=2500")
+GLMakie.lines!(axOrderMean,NumIter3,summedOrder[:,3],color="green",label="N=5000")
+GLMakie.lines!(axOrderMean,NumIter4,summedOrder[:,4],color="black",label="N=10000")
+GLMakie.lines!(axOrderMean,NumIter5,summedOrder[:,5],color="orange",label="N=20000")
+OrderFigMean[1, 2] = GLMakie.Legend(OrderFigMean,axOrderMean)
+
+α[] = 1.0
+
+display(OrderFigMean)
+
+

@@ -70,10 +70,12 @@ cd run
 The parameters read by the program will then be written to the screen, and the result will be written to the HDF5-file with the specified savefile name.
 
 ### A note on HDF5-files
-*Tl;dr: If the same file name is multiple times to save a HDF5 file, like `SaveFiles.h5`, delete the existing file before a new simulation.*
+*Tl;dr: If the same file name is used multiple times to save a HDF5 file, like `SaveFiles.h5`, delete the existing file before a new simulation.*
 
-When choosing a filename for the file containing the snapshots, the program does not delete existing files with the same name. It will instead partially write over this file, due to the nature of HDF5-files. 
+When choosing a filename for the file containing the snapshots, the program does not delete existing files with the same name. It will instead partially write over this file, due to the nature of HDF5-files.
+
 This can lead to two main problems, with the first being that the program can crash if e.g. the number of paricles change between runs, and the file is still present. The reason is that the program will attempt to write over an array that already exists, but as the dimensions now have changed, the operation will fail.
+
 The second can occur when only the number of snapshots is reduced between two runs. The program will run without errors, and the snapchots will be saved to the savefile. The problem is that as it is now overwriting existing arrays, the previous simulation snapshots will still exist. This will lead to incorrect results if the analysis attempts to analyze both the current snapshots, and some left over snapshots from a previous run.
 
 

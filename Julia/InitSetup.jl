@@ -5,8 +5,8 @@ using HDF5
 
 # ---------------------------------------------------------------
 # SET PARAMETERS - SIMULATION -
-NPart::Int64 = 1000
-NSimulationIterations::Int64 = 7000
+NPart::Int64 = 10000
+NSimulationIterations::Int64 = 10000
 SaveEverySimulation::Int64 = 7
 kSimulation::Float64 = 60.0
 kNonLin::Float64 = 60.0
@@ -40,6 +40,8 @@ growSize::Float64 = 0.3
 D::Float64 = 0.01
 NTimeSteps::Int64 = 10000
 Extrasteps::Int64 = 20000 # May need to be even longer
+SecondHeatingSteps::Int64 = 10000
+SecondHeatingDecrease::Int64 = 10000
 A::Float64 = 5.0
 dt::Float64 = 0.02
 saveEvery::Int64 = 1
@@ -55,7 +57,7 @@ DelaunayPlot::Bool = false
 NeighbourPlot::Bool = false
 
 # SET PARAMETERS - OPERATION -
-InitSystem::Bool = false
+InitSystem::Bool = true
 
 # ---------------------------------------------------------------
 
@@ -291,7 +293,7 @@ function CalcNextStep!(CoordArray::Array{Float64},iNew::Int64,iOld::Int64,forceV
 end
 
 function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Float64},finalMeanRad::Float64,growSize::Float64,NTimeSteps::Int64,Extrasteps::Int64, ExtraSlots::Int64, MoveMultiplier::Float64, 
-                            A::Float64,dt::Float64,BrownianMethod!::Function,BoundaryMethod!::Function,b::Float64,save::Bool)
+                            A::Float64,dt::Float64,BrownianMethod!::Function,BoundaryMethod!::Function,b::Float64,SecondHeatingSteps::Int64,SecondHeatingDecrease::Int64)
 
     # ------- Allocate -------
 
@@ -323,6 +325,8 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
     # Set the incremental increase in radius equal to the growSize/ NTimeSteps
     IncrementRadIncrease::Float64 = growSize/NTimeSteps
     IncrementDReduce::Float64 = 2*D/(Extrasteps+1)
+    IncrementDIncrease::Float64 = 2*D/(SecondHeatingSteps+1)
+    IncrementDReduceSecond::Float64 = 2*D/(SecondHeatingDecrease+1)
     
     # Initializing a vector to be filled with radii to each particle
     radCenter::Vector{Float64} = zeros(NPart)
@@ -345,20 +349,6 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
     NeighbourCount::Matrix{Int64} = zeros(Int64,NCells,NCells)
 
     DivVec::Vector{Float64} = zeros(2)
-
-    # Initialize save arrays
-    if save
-        # Initialize zero arrays
-        SaveRadArray = zeros(NPart,floor(Int,(NTimeSteps+Extrasteps)/saveEvery)+1)
-        SaveCoordArray = zeros(2,NPart,floor(Int,(NTimeSteps+Extrasteps)/saveEvery)+1)
-
-        # Save the first config
-        SaveRadArray[:,1] = radArray
-        SaveCoordArray[:,:,1] = CoordArray[:,:,iOld]
-
-        # Set the next saveindex to be 2
-        saveCounter = 2
-    end
     
     # Fill the coordinate array with initial coordinates given by the InitCoords function.
     InitCoords!(CoordArray,NPart,R,iOld,randAngle,randRadius)
@@ -370,39 +360,9 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
     CountLength::Int64 = length(NeighbourCount)
     CoordArraySliced::Vector{Tuple{Int64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}} = collect(enumerate(eachslice(CoordArrayShift,dims=2)))
     # Loop over all timesteps AND extrasteps
-    for iTimeStep in 1:(NTimeSteps + Extrasteps)
+    for iTimeStep in 1:(NTimeSteps + Extrasteps + SecondHeatingSteps + SecondHeatingDecrease)
         # Calculate the thermal displacements
         BrownianMethod!(RandDisp, randAngle, randRadius, NPart, D, dt)
-        
-        # if iTimeStep%300 == 0
-
-
-        #     CircleArray = zeros(2,100)
-        #     PhiCirc = LinRange(0,2*pi,100)
-        #     CircleArray[1,:] = R*cos.(PhiCirc)
-        #     CircleArray[2,:] = R*sin.(PhiCirc)
-
-
-        #     function circle(x, y, r=1; n=30)
-        #         θ = 0:360÷n:360
-        #         Plots.Shape(r*sind.(θ) .+ x, r*cosd.(θ) .+ y)
-        #     end
-
-
-        #     # TimeHop = 400
-        #     # i = 1
-        #     circles = circle.(CoordArray[1,:,iOld],CoordArray[2,:,iOld],radArray[:].*0.5)
-
-
-        #     plot_kwargs = (aspect_ratio=:equal, fontfamily="Helvetica", legend=false, line="red",
-        #         color=:white, grid=false, xlims=(-R-1,R+1), ylims=(-R-1,R+1))
-
-
-        #     aPlot =  Plots.plot(circles; plot_kwargs...)
-        #     Plots.plot!(CircleArray[1,:],CircleArray[2,:],size=(800,800))
-        #     display(aPlot)
-        # end
-
         # Sort particles in boxes
         MaxPart, NeighbourIndices = UpdateNeighbours(NeighbourIndices,NeighbourCount,NCells,CoordArrayShift,l,DivVec,MaxPart,ExtraSlots)
         if length(NeighbourCount) != CountLength
@@ -427,28 +387,31 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
             D -= IncrementDReduce
         end
 
+        # SECOND HEATING ------------------------------------------------------------------------------------------------------------------------------------------------
+        # Increase brownian noise if iTimeStep > NTimeSteps+Extrasteps && iTimeStep <= NTimeSteps+Extrasteps+SecondHeatingSteps/2
+        if iTimeStep > NTimeSteps+Extrasteps && iTimeStep <= NTimeSteps+Extrasteps+SecondHeatingSteps/2
+            D += IncrementDIncrease
+        end
+
+        # Decrease brownian noise if iTimeStep > NTimeSteps && iTimeStep <= NTimeSteps+Extrasteps/2
+        if iTimeStep > NTimeSteps+Extrasteps+SecondHeatingSteps && iTimeStep <= NTimeSteps+Extrasteps+SecondHeatingSteps+SecondHeatingDecrease/2
+            D -= IncrementDReduceSecond
+        end
+
+        # ---------------------------------------------------------------------------------------------------------------------------------------------------------------
+
         # Index Swap
         iOld = 3::Int64 - iOld
         iNew = 3::Int64 - iNew
         
         # Print percentage
         if iTimeStep%1000 == 0
-            println("Percentage finished: ", iTimeStep*100/(NTimeSteps+Extrasteps),"%")
-        end
-        # Save snapshot
-        if save && iTimeStep%saveEvery == 0
-            @view(SaveRadArray[:,saveCounter]) .= radArray
-            @view(SaveCoordArray[:,:,saveCounter]) .= @view(CoordArray[:,:,iOld])
-            saveCounter += 1
+            println("Percentage finished: ", iTimeStep*100/(NTimeSteps+Extrasteps+SecondHeatingSteps+SecondHeatingDecrease),"%")
         end
     end
 
     # Return
-    if save
-        return SaveCoordArray, SaveRadArray, R
-    else
-        return CoordArray[:,:,iOld], radArray, R
-    end
+    return CoordArray[:,:,iOld], radArray, R
 end
 
 # Setting the function variables equal to the functions
@@ -468,8 +431,9 @@ using BenchmarkTools
 # ----------------------------------------------------------------------------------------------------------------------------
 # CALC INITIAL VALS #
 # ----------------------------------------------------------------------------------------------------------------------------
+
 if InitSystem
-    @time SaveCoordArray, SaveRadArray,R = InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b, false)
+    @time SaveCoordArray, SaveRadArray, R = InitializeSystem(NPart,ρ,D,spread,finalMeanRad,growSize,NTimeSteps,Extrasteps,ExtraSlots,MoveMultiplier,A,dt,BrownianMethodFunc!,BoundaryMethodFunc!,b,SecondHeatingSteps,SecondHeatingDecrease)
 end
 
 # NumberParticles = [10,30,60,100,300,600,1000,3000,6000,10000,20000,30000,40000,50000,60000]

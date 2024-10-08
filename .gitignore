@@ -21,3 +21,6 @@ Fortran/build/*
 
 # Ignore the local paths to libraries
 */source/CMakeLists.txt
+
+# Ignore notes-folder
+Notes
