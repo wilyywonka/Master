@@ -355,7 +355,7 @@ function InitializeSystem(NPart::Int64,ρ::Float64,D::Float64,spread::Vector{Flo
 
     CoordArrayShift .= @view(CoordArray[:,:,iOld]) .+ MoveMultiplier*R
 
-    NeighbourIndices, MaxPart = InitNeighbours(NeighbourCount,NCells,CoordArrayShift[:,:,iOld],l,DivVec,ExtraSlots)
+    NeighbourIndices, MaxPart = InitNeighbours(NeighbourCount,NCells,CoordArrayShift,l,DivVec,ExtraSlots)
     CountCoords::CartesianIndices{2, Tuple{Base.OneTo{Int64}, Base.OneTo{Int64}}} = CartesianIndices(NeighbourCount)
     CountLength::Int64 = length(NeighbourCount)
     CoordArraySliced::Vector{Tuple{Int64, SubArray{Float64, 1, Matrix{Float64}, Tuple{Base.Slice{Base.OneTo{Int64}}, Int64}, true}}} = collect(enumerate(eachslice(CoordArrayShift,dims=2)))
