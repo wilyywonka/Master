@@ -3,27 +3,29 @@ using Plots
 using Statistics
 using HDF5
 
-NumIter::Int64 = 1428
-NPart::Int64 = 10000
+NumIter::Int64 = 4000
+NPart::Int64 = 40000
 MarkerSizePlot::Int64 = 2
 ArrowLengthPlot::Float64 = 0.9
 
-FilePath::String = "./HDF5Files/SaveFiles2.h5"
+FilePath::String = "./HDF5Files/SaveFiles.h5"
+H5FileName = "HDF5Files/CorrelationFileN40000.h5"
 
 NormPlot::Bool = false
 DiffPlot::Bool = false
-QuivPolPlot::Bool = true
+QuivPolPlot::Bool = false
 ColPlot::Bool = false
 
 PolOrderAnalysis::Bool = false
 
-CorrelationAnalysis::Bool = false
 NaiveCorrelationAnalysis::Bool = false
 SimpleCorrelation::Bool = true
 
-CorrelationPlot::Bool = true
+CorrLengthAnalysis::Bool = false
+saveCorrelationFunction::Bool = false
+CorrelationPlot::Bool = false
 
-if NormPlot|DiffPlot|QuivPolPlot|ColPlot|CorrelationAnalysis|SimpleCorrelation
+if NormPlot|DiffPlot|QuivPolPlot|ColPlot|SimpleCorrelation|NaiveCorrelationAnalysis
 
     R = h5read("./HDF5Files/SaveFiles.h5", "SaveParams/R")
 
@@ -41,7 +43,6 @@ if NormPlot|DiffPlot|QuivPolPlot|ColPlot|CorrelationAnalysis|SimpleCorrelation
         SimulatedDisplacement[:,:,i]   = h5read(FilePath, "SaveParams/Displacement/"*string(i))
     end
 
-
     CircleArray = zeros(2,100)
     PhiCirc = LinRange(0,2*pi,100)
     CircleArray[1,:] = R*cos.(PhiCirc)
@@ -49,7 +50,7 @@ if NormPlot|DiffPlot|QuivPolPlot|ColPlot|CorrelationAnalysis|SimpleCorrelation
 
 end
 
-NumPartBases::Int64 = 100
+NumPartBases::Int64 = 1000
 PartHop::Int64 = ceil(Int64, NPart/NumPartBases)
 
 if length(collect(1:PartHop:NPart)) != NumPartBases
@@ -57,212 +58,37 @@ if length(collect(1:PartHop:NPart)) != NumPartBases
 end
     
 
-ΔBins = 2.0 # 2*biggest radius, plus a little
-NumBins = ceil(Int64, 2*R/ΔBins + 10)
-LBins = NumBins*ΔBins
+ΔBins::Float64 = 2.6 # 2*biggest radius, plus a little
+NumBins::Int64 = ceil(Int64, 2*R/ΔBins + 10)
+LBins::Float64 = NumBins*ΔBins
 
-NBins = NumBins
-MaxBinRadiusFraq = LBins/R
+
 ExtraSlots::Int64 = 5
 MoveMultiplier::Float64 = 1.5
 PartSizeSpread::Vector{Float64} = [0.85,1.15]
 SimulatedCoordsShift::Matrix{Float64} = zeros(2,NPart)
 
 
-CorrelationFunctionValues::Array{Float64} = zeros(NBins,NumPartBases,NumIter)
-CorrelationFunctionMean::Matrix{Float64} = zeros(NBins,NumIter)
-
-
-
-if CorrelationAnalysis
-    function InitNeighbours(NeighbourCount::Matrix{Int64}, NCells::Int64, CoordArrayShift::Matrix{Float64},l::Float64,DivVec::Vector{Float64},ExtraSlots::Int64)
-        iCell::Int64 = 0
-        jCell::Int64 = 0
-        IndexPlacement::Int64 = 0
-        MaxPart::Int64 = 0
-        NeighbourCount .= 0
-        for Vec in eachslice(CoordArrayShift,dims=2)
-
-            DivVec .= Vec./l
-        
-            iCell = ceil(Int64,DivVec[1])
-
-            jCell = ceil(Int64,DivVec[2])
-
-            @inbounds NeighbourCount[iCell,jCell] += 1
-        end
-
-        MaxPart = maximum(NeighbourCount) + ExtraSlots
-        NeighbourIndices::Array{Int64} = zeros(Int64,MaxPart,NCells,NCells)
-        NeighbourCount .= 0
-
-        for (iParticle,Vec) in enumerate(eachslice(CoordArrayShift,dims=2))
-
-            DivVec .= Vec./l
-
-            iCell = ceil(Int64,DivVec[1])
-
-            jCell = ceil(Int64,DivVec[2])
-
-            @inbounds NeighbourCount[iCell,jCell] += 1
-            IndexPlacement = NeighbourCount[iCell,jCell]
-            @inbounds NeighbourIndices[IndexPlacement,iCell,jCell] = iParticle
-
-        end
-        return NeighbourIndices, MaxPart
-    end
-
-    function UpdateNeighbours(NeighbourIndices::Array{Int64},NeighbourCount::Matrix{Int64}, NCells::Int64, CoordArrayShift::Matrix{Float64},l::Float64,DivVec::Vector{Float64}, MaxPart::Int64, ExtraSlots::Int64)
-        iCell::Int64 = 0
-        jCell::Int64 = 0
-        IndexPlacement::Int64 = 0
-        NeighbourCount .= 0
-        for (iParticle,Vec) in enumerate(eachslice(CoordArrayShift,dims=2))
-
-            DivVec .= Vec./l
-
-            iCell = ceil(Int64,DivVec[1])
-
-            jCell = ceil(Int64,DivVec[2])
-
-            @inbounds @view(NeighbourCount[iCell,jCell]) .+= 1::Int64
-
-            @inbounds IndexPlacement = @view(NeighbourCount[iCell,jCell])[1]
-            if IndexPlacement <= MaxPart
-                @inbounds NeighbourIndices[IndexPlacement,iCell,jCell] = iParticle
-            else
-                println("The number of particles in the cell is greater than MaxNeighbour! Reshaping NeighbourMatrix and recursively calling function.")
-                MaxPart += 5
-                NeighbourIndices = zeros(Int64,MaxPart+ExtraSlots,NCells,NCells)
-                MaxPart, NeighbourIndices = UpdateNeighbours(NeighbourIndices,NeighbourCount, NCells, CoordArrayShift, l, DivVec, MaxPart, ExtraSlots)
-                return MaxPart, NeighbourIndices
-            end
-
-        end
-        return MaxPart, NeighbourIndices
-    end
-
-    function CalculateCorrelation!(iIter::Int64, NBins::Int64, BinRadiusVector::Vector{Float64}, NeighbourIndices::Array{Int64}, NeighbourCount::Matrix{Int64}, CorrelationFunctionValues::Array{Float64}, l::Float64, lDiag::Float64,
-        NCells::Int64, xValsMidCells::Vector{Float64}, yValsMidCells::Vector{Float64}, SimulatedCoordsShift::Matrix{Float64}, SimulatedPolAng::Matrix{Float64}, PartHop::Int64,NPart::Int64)
-
-        Threads.@threads for iParticle in 1:PartHop:NPart
-            CurrCellX = ceil(Int64,SimulatedCoordsShift[1,iParticle]/l)
-            CurrCellY = ceil(Int64,SimulatedCoordsShift[2,iParticle]/l)
-            #println(CurrCellX, ", ",CurrCellY)
-            
-            for iBin in 1:NBins
-                PartWithinBin::Int64 = 0
-                InnerR::Float64 = BinRadiusVector[iBin]
-                OuterR::Float64 = BinRadiusVector[iBin+1]
-                OuterComp::Float64 = 0.0
-                InnerComp::Float64 = 0.0
-
-                xSpan = max(1,ceil(Int64,(xValsMidCells[CurrCellX]-(OuterR+lDiag))/l)):min(NCells, ceil(Int64,(xValsMidCells[CurrCellX]+(OuterR+lDiag))/l))
-                ySpan = max(1,ceil(Int64,(yValsMidCells[CurrCellY]-(OuterR+lDiag))/l)):min(NCells, ceil(Int64,(yValsMidCells[CurrCellY]+(OuterR+lDiag))/l))
-
-                for xCell in xSpan
-                    for yCell in ySpan
-                        @inbounds CellRad::Float64 = sqrt((@view(xValsMidCells[xCell])[1]-@view(xValsMidCells[CurrCellX])[1])^2 + (@view(yValsMidCells[yCell])[1]-@view(yValsMidCells[CurrCellY])[1])^2)
-                        OuterComp = CellRad-lDiag
-                        InnerComp = CellRad+lDiag
-                        if InnerComp > InnerR && OuterComp < OuterR
-                            for iPartInCell in 1:NeighbourCount[xCell,yCell]
-                                @inbounds iNeighbour::Int64 = NeighbourIndices[iPartInCell,xCell,yCell]
-                                if iNeighbour != iParticle
-                                    PartRad::Float64 = sqrt((@view(SimulatedCoordsShift[1,iParticle])[1]-@view(SimulatedCoordsShift[1,iNeighbour])[1])^2 + (@view(SimulatedCoordsShift[2,iParticle])[1]-@view(SimulatedCoordsShift[2,iNeighbour])[1])^2)
-                                    if PartRad<OuterR && PartRad>InnerR
-                                        PartWithinBin += 1
-                                        @inbounds @view(CorrelationFunctionValues[iBin,iParticle,iIter]) .+= cos(SimulatedPolAng[iParticle,iIter]-SimulatedPolAng[iNeighbour,iIter])
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-                if PartWithinBin != 0
-                    # Divide by number of particles
-                    CorrelationFunctionValues[iBin,iParticle,iIter] *= 1/PartWithinBin
-                end
-            end
-        end
-        return nothing
-    end
-
-    function AnalyzeCorrelation(NPart,PartHop,NBins,NumIter,MaxBinRadiusFraq,ExtraSlots::Int64,MoveMultiplier::Float64,PartSizeSpread::Vector{Float64},
-        SimulatedCoordsShift::Matrix{Float64},CorrelationFunctionValues::Array{Float64},CorrelationFunctionMean::Matrix{Float64})
-        
-        BinRadiusVector::Vector{Float64} = collect(LinRange(0, R*MaxBinRadiusFraq,NBins+1))
-        BinMidpointRadius::Vector{Float64} = BinRadiusVector[2:end] .- (BinRadiusVector[2]-BinRadiusVector[1])/2
-
-        GridSpanDef::Vector{Float64} = [0,2*MoveMultiplier*R]
-        NCells::Int64 = Int(floor((GridSpanDef[2]-GridSpanDef[1])/(2*PartSizeSpread[2])))
-    
-        xVec::Vector{Float64} = collect(LinRange(GridSpanDef[1],GridSpanDef[2],NCells + 1))
-        yVec::Vector{Float64} = collect(LinRange(GridSpanDef[1],GridSpanDef[2],NCells + 1))
-
-    
-        l::Float64 = xVec[2]-xVec[1]
-        xValsMidCells::Vector{Float64} = xVec[2:end] .- l/2
-        yValsMidCells::Vector{Float64} = yVec[2:end] .- l/2
-
-        lDiag::Float64 = sqrt(2)*l
-
-        NeighbourCount::Matrix{Int64} = zeros(Int64,NCells,NCells)
-
-        DivVec::Vector{Float64} = zeros(2)
-
-
-        RefPart::Int64 = argmin(SimulatedCoords[1,:,1].^2 .+ SimulatedCoords[2,:,1].^2)
-        SimulatedCoordsShift[1,:] .= @view(SimulatedCoords[1,:,1]) .+ (MoveMultiplier*R - SimulatedCoords[1,RefPart,1])
-        SimulatedCoordsShift[2,:] .= @view(SimulatedCoords[2,:,1]) .+ (MoveMultiplier*R - SimulatedCoords[2,RefPart,1])
-
-        NeighbourIndices, MaxPart = InitNeighbours(NeighbourCount,NCells,SimulatedCoordsShift,l,DivVec,ExtraSlots)
-
-        # Update every 1:NumIter
-        for iIter in 1:NumIter
-            println("Iteration:", iIter)
-            # GridSpanX::Vector{Float64} = [SimulatedCoords[1,RefPart,iIter]-MoveMultiplier*R,SimulatedCoords[1,RefPart,iIter]+MoveMultiplier*R]
-            # GridSpanY::Vector{Float64} = [SimulatedCoords[2,RefPart,iIter]-MoveMultiplier*R,SimulatedCoords[2,RefPart,iIter]+MoveMultiplier*R]
-
-            SimulatedCoordsShift[1,:] .= @view(SimulatedCoords[1,:,iIter]) .+ (MoveMultiplier*R - SimulatedCoords[1,RefPart,iIter])
-            SimulatedCoordsShift[2,:] .= @view(SimulatedCoords[2,:,iIter]) .+ (MoveMultiplier*R - SimulatedCoords[2,RefPart,iIter])
-
-            MaxPart, NeighbourIndices = UpdateNeighbours(NeighbourIndices,NeighbourCount,NCells,SimulatedCoordsShift,l,DivVec,MaxPart,ExtraSlots)
-            # println(NeighbourIndices)
-            # Split into bases and parallel
-            CalculateCorrelation!(iIter, NBins, BinRadiusVector, NeighbourIndices, NeighbourCount, CorrelationFunctionValues, l, lDiag,
-                NCells, xValsMidCells, yValsMidCells, SimulatedCoordsShift, SimulatedPolAng, PartHop, NPart)
-            for iBin in 1:NBins
-                CorrelationFunctionMean[iBin,iIter] = mean(CorrelationFunctionValues[iBin,:,iIter])
-            end
-        end
-        return BinMidpointRadius, CorrelationFunctionMean
-    end
-    
-    @profview BinMidpointRadius,CorrelationFunctionMean = AnalyzeCorrelation(NPart,PartHop,NBins,NumIter,MaxBinRadiusFraq,ExtraSlots,MoveMultiplier,PartSizeSpread,
-        SimulatedCoordsShift,CorrelationFunctionValues,CorrelationFunctionMean)    
-
-end
-
 if SimpleCorrelation
 
     function AnalyzeCorrelationSimple(NumIter::Int64, NPart::Int64, ΔBins::Float64, NumBins::Int64, NumPartBases::Int64, 
         PartHop::Int64, SimulatedCoords::Array{Float64}, SimulatedPolAng::Matrix{Float64})
 
-        CorrelationFunctionValues::Array{Float64} = zeros(NBins,NumPartBases,NumIter)
-        CorrelationFunctionMean::Matrix{Float64} = zeros(NBins,NumIter)
+        CorrelationFunctionValues::Array{Float64} = zeros(NumBins,NumPartBases,NumIter)
+        CorrelationFunctionMean::Matrix{Float64} = zeros(NumBins,NumIter)
         
-        BinMidpointRadius = collect(1:NumBins)*ΔBins/2
+        BinMidpointRadius = collect(1:NumBins)*ΔBins .- ΔBins/2
         NumParticleInBin::Array{Int64} = zeros(Int64,NumBins,NumPartBases,NumIter)
         PartBases::Vector{Int64} = collect(1:PartHop:NPart)
         RadPartMat::Matrix{Float64} = zeros(NPart,NumPartBases)
         CurrBinMat::Matrix{Int64} = zeros(NPart-1,NumPartBases)
         ParticleNumbers::Matrix{Int64} = zeros(Int64,NPart-1, NumPartBases)
         CounterVec::Vector{Int64} = ones(Int64,NumPartBases)
-
+        PartBinSummed::Matrix{Int64} = zeros(Int64, NumBins, NumIter)
 
         for iIter in 1:NumIter
             #Parallel
+            #Threads.@threads for iNumBase in 1:NumPartBases
             Threads.@threads for iNumBase in 1:NumPartBases
 
                 iParticle::Int64 = PartBases[iNumBase]
@@ -281,20 +107,18 @@ if SimpleCorrelation
                     @inbounds @view(RadPartMat[jNeighbour,iNumBase]) .= sqrt((SimulatedCoords[1,jParticle,iIter]-SimulatedCoords[1,iParticle,iIter]).^2 .+ (SimulatedCoords[2,iParticle,iIter]-SimulatedCoords[2,jParticle,iIter]).^2)
                     @inbounds @view(CurrBinMat[jNeighbour,iNumBase]) .= ceil(Int64,RadPartMat[jNeighbour,iNumBase]./ΔBins)
                     @inbounds @view(NumParticleInBin[CurrBinMat[jNeighbour,iNumBase],iNumBase,iIter]) .+= 1
-                    if iIter==NumIter && CurrBinMat[jNeighbour,iNumBase] == 1 && cos(SimulatedPolAng[iParticle,iIter]-SimulatedPolAng[jParticle,iIter])<0.5
-                        println("ΔBins: ", ΔBins, " rad: ", RadPartMat[jNeighbour,iNumBase], " | cos: ", cos(SimulatedPolAng[iParticle,iIter]-SimulatedPolAng[jParticle,iIter]))
-                        println("iNumBase ",iNumBase, " jParticle ",jParticle)
-                    end
                     @inbounds @view(CorrelationFunctionValues[CurrBinMat[jNeighbour,iNumBase],iNumBase,iIter]) .+= cos(SimulatedPolAng[iParticle,iIter]-SimulatedPolAng[jParticle,iIter])
                 end
             end
-            println("Iteration: ",iIter)
+            if iIter%100 == 0
+                println("Iteration: ",iIter)
+            end
         end
 
         for iIter in 1:NumIter
             for iBin in 1:NumBins
                 SummedNumber = sum(NumParticleInBin[iBin, :, iIter])
-
+                PartBinSummed[iBin,iIter] = round(Int64,SummedNumber/NumPartBases)
                 if SummedNumber != 0
                     CorrelationFunctionMean[iBin,iIter] = sum(CorrelationFunctionValues[iBin, :, iIter])/SummedNumber
                 else
@@ -304,96 +128,87 @@ if SimpleCorrelation
         end
         
 
-        return BinMidpointRadius, CorrelationFunctionMean
+        return BinMidpointRadius, CorrelationFunctionMean, PartBinSummed
     end
-    
-#    BinMidpointRadius, CorrelationFunctionMean1 = AnalyzeCorrelationSimple(10, NPart, ΔBins, NumBins, NumPartBases, 
- #       PartHop, CorrelationFunctionValues, CorrelationFunctionMean,SimulatedCoords, SimulatedPolAng)
 
-    #@profview BinMidpointRadius, CorrelationFunctionMean2 = AnalyzeCorrelationSimple2(10, NPart, ΔBins, NumBins, NumPartBases, 
-     #   PartHop, CorrelationFunctionValues, CorrelationFunctionMean,SimulatedCoords, SimulatedPolAng)
-
-
-    @time BinMidpointRadius, CorrelationFunctionMean = AnalyzeCorrelationSimple(NumIter, NPart, ΔBins, NumBins, NumPartBases, 
-        PartHop,SimulatedCoords, SimulatedPolAng)
+    @time BinMidpointRadius, CorrelationValuesMean, NumPartBin = AnalyzeCorrelationSimple(NumIter, NPart, ΔBins, NumBins, NumPartBases, PartHop,SimulatedCoords, SimulatedPolAng)
 
 end
-# iIter = 1428
-# iNumBase = 29
-# jParticle = 
-# aPlot = Plots.scatter(SimulatedCoords[1,:,iIter],SimulatedCoords[2,:,iIter],color="blue")
-# Plots.scatter!([SimulatedCoords[1,jParticle,iIter]],[SimulatedCoords[2,jParticle,iIter]],color="red")
-# Plots.scatter!([SimulatedCoords[1,iNumBase,iIter]],[SimulatedCoords[2,iNumBase,iIter]],color="green")
-# Plots.quiver!(SimulatedCoords[1,:,iIter],SimulatedCoords[2,:,iIter],quiver=(cos.(SimulatedPolAng[:,iIter]), sin.(SimulatedPolAng[:,iIter])))
-# Plots.xlims!([SimulatedCoords[1,jParticle,iIter]-3,SimulatedCoords[1,jParticle,iIter]+3])
-# Plots.ylims!([SimulatedCoords[2,jParticle,iIter]-3,SimulatedCoords[2,jParticle,iIter]+3])
-# display(aPlot)
-
-a = GLMakie.lines(BinMidpointRadius,CorrelationFunctionMean[:,1428])
-
-# if NaiveCorrelationAnalysis
-#     # NBins = 20
-#     # MaxBinRadiusFraq = 0.5
-#     # NumPartBases::Int64 = 1000
-
-#     # CorrelationFunctionValues::Array{Float64} = zeros(NBins,NumPartBases,NumIter)
-#     # CorrelationFunctionMean::Matrix{Float64} = zeros(NBins,NumIter)
-
-#     BinRadiusVector = LinRange(0, R*MaxBinRadiusFraq,NBins+1)
-#     BinMidpointRadius = BinRadiusVector[2:end] .- (BinRadiusVector[2]-BinRadiusVector[1])/2
-
-#     for iIter in 1:NumIter
-#         for iParticle in 1:NumPartBases
-#             Radii = sqrt.((SimulatedCoords[1,:,iIter].-SimulatedCoords[1,iParticle,iIter]).^2 .+ (SimulatedCoords[2,:,iIter].-SimulatedCoords[2,iParticle,iIter]).^2)
-#             for iBin in 1:NBins
-#                 PartWithinBin::Int64 = 0
-#                 InnerR::Float64 = BinRadiusVector[iBin]
-#                 OuterR::Float64 = BinRadiusVector[iBin+1]
-                
-#                 IndicesInBin = findall(Radii .> InnerR .&& Radii .< OuterR)
-#                 for iNeighbour in IndicesInBin
-#                     if iParticle != iNeighbour
-#                         PartWithinBin += 1
-#                         CorrelationFunctionValues[iBin,iParticle,iIter] += cos(SimulatedPolAng[iParticle,iIter]-SimulatedPolAng[iNeighbour,iIter])
-#                     end
-#                 end
-#                 if PartWithinBin != 0
-#                     # Divide by number of particles
-#                     CorrelationFunctionValues[iBin,iParticle,iIter] *= 1/PartWithinBin
-#                 end
-#             end
-#         end
-#         for iBin in 1:NBins
-#             CorrelationFunctionMean[iBin,iIter] = mean(CorrelationFunctionValues[iBin,:,iIter])
-#         end
-#         println("Iteration: ",iIter)
-#     end
-#     Plots.plot(BinMidpointRadius,CorrelationFunctionMean[:,1])
-# end
 
 
-function WriteCorrelationHDF5(Filename, CorrelationArray, NumBins, NumberParticles,  NumIter, BinMidpointRadius)
-    fid = h5open(Filename,"w")
-    
-    h5File = create_group(fid, "CorrelationGroup")
-    
-    h5File["CorrelationArray"] = CorrelationArray
-    
-    h5File["NumPart"] = NumberParticles
-    
-    h5File["NumBins"] = NumBins
-    
-    h5File["BinMidpointRadius"] = BinMidpointRadius
-    
-    h5File["NumIter"] = NumIter
-    
-    close(fid)
+if NaiveCorrelationAnalysis
+    function NaiveCorrelation(NPart::Int64, NumIter::Int64, NumBins::Int64, MaxRadius::Float64, SimulatedCoords::Array{Float64}, SimulatedPolAng::Matrix{Float64}, NumPartBases::Int64, PartHop::Int64)
+        CorrelationFunctionValues::Array{Float64} = zeros(NumBins,NumPartBases,NumIter)
+        CorrelationFunctionMean::Matrix{Float64} = zeros(NumBins,NumIter)
+        PartBases::Vector{Int64} = collect(1:PartHop:NPart)
+        BinRadiusVector = LinRange(0, MaxRadius, NumBins+1)
+        BinMidpointRadius = BinRadiusVector[2:end] .- (BinRadiusVector[2]-BinRadiusVector[1])/2
+        PartWithinBinNum::Array{Int64} = zeros(Int64, NumBins, NumPartBases, NumIter)
+        PartBinSummed::Matrix{Int64} = zeros(Int64, NumBins, NumIter)
+
+        for iIter in 1:NumIter
+            Threads.@threads for iParticle in 1:NumPartBases
+                BasePartIdx::Int64 = PartBases[iParticle]
+                Radii = sqrt.((SimulatedCoords[1,:,iIter].-SimulatedCoords[1,BasePartIdx,iIter]).^2 .+ (SimulatedCoords[2,:,iIter].-SimulatedCoords[2,BasePartIdx,iIter]).^2)
+                for iBin in 1:NumBins
+                    PartWithinBin::Int64 = 0
+                    InnerR::Float64 = BinRadiusVector[iBin]
+                    OuterR::Float64 = BinRadiusVector[iBin+1]
+                    
+                    IndicesInBin = findall(Radii .> InnerR .&& Radii .< OuterR)
+                    for iNeighbour in IndicesInBin
+                        if BasePartIdx != iNeighbour
+                            PartWithinBin += 1
+                            CorrelationFunctionValues[iBin,iParticle,iIter] += cos(SimulatedPolAng[BasePartIdx,iIter]-SimulatedPolAng[iNeighbour,iIter])
+                        end
+                    end
+                    # Divide by number of particles
+                    PartWithinBinNum[iBin,iParticle,iIter] = PartWithinBin
+                end
+            end
+            if iIter%100 == 0
+                println("Iteration: ",iIter)
+            end
+        end
+
+        for iIter in 1:NumIter
+            for iBin in 1:NumBins
+                summedNumPart = sum(PartWithinBinNum[iBin,:,iIter])
+                PartBinSummed[iBin,iIter] = round(Int64,summedNumPart/NumPartBases)
+                if summedNumPart != 0
+                    CorrelationFunctionMean[iBin,iIter] = sum(CorrelationFunctionValues[iBin,:,iIter])/summedNumPart
+                end
+            end
+        end
+        return BinMidpointRadius, CorrelationFunctionMean, PartBinSummed
+    end
+    @time BinMidpointRadiusNaive, CorrelationValuesMeanNaive, NumPartBinNaive = NaiveCorrelation(NPart, NumIter, NumBins, LBins, SimulatedCoords, SimulatedPolAng, NumPartBases, PartHop)
 end
 
-WriteCorrelationHDF5("HDF5Files/CorrelationFile.h5", CorrelationFunctionMean, NumBins, NPart,  NumIter, BinMidpointRadius)
+if saveCorrelationFunction
+    function WriteCorrelationHDF5(Filename, CorrelationArray, NumBins, NumberParticles,  NumIter, BinMidpointRadius)
+        fid = h5open(Filename,"w")
+        
+        h5File = create_group(fid, "CorrelationGroup")
+        
+        h5File["CorrelationArray"] = CorrelationArray
+        
+        h5File["NumPart"] = NumberParticles
+        
+        h5File["NumBins"] = NumBins
+        
+        h5File["BinMidpointRadius"] = BinMidpointRadius
+        
+        h5File["NumIter"] = NumIter
+        
+        close(fid)
+    end
+
+    WriteCorrelationHDF5(H5FileName, CorrelationValuesMean, NumBins, NPart,  NumIter, BinMidpointRadius)
+end
 
 if CorrelationPlot
-    #WriteCorrelationHDF5("CorrelationFile.h5", CorrelationFunctionMean, NBins, NPart,  NumIter, BinMidpointRadius)
+    #WriteCorrelationHDF5("CorrelationFile.h5", CorrelationFunctionMean, NumBins, NPart,  NumIter, BinMidpointRadius)
 
     BinMidpointRadius = h5read("HDF5Files/CorrelationFile.h5", "CorrelationGroup/BinMidpointRadius")
     NumIter = h5read("HDF5Files/CorrelationFile.h5", "CorrelationGroup/NumIter")
@@ -403,8 +218,8 @@ if CorrelationPlot
     Corrdata = @lift CorrelationFunctionMean[:,$iPlot]
 
     GLMakie.activate!(inline = false,focus_on_show=false)
-    figCorr = Figure(size = (950,800))
-    axCorr = Axis(figCorr[1, 1],limits=(nothing,(-0.05, 1.05)))
+    figCorr = Figure(size = (1200,900))
+    axCorr = Axis(figCorr[1, 1],limits=(nothing,(-0.3, 1.05)))
 
 
     GLMakie.lines!(axCorr, BinMidpointRadius, Corrdata, label="Correlation")
@@ -418,10 +233,69 @@ if CorrelationPlot
     end
 end
 
+if CorrLengthAnalysis
+    #
+    # Corr <> corrcutoff
+    # NumPart
+    # 
+    #
+    #
+
+    #
+    #Outcomes
+    # Corr is above, num is above -> success
+    # Corr is above, num is below -> inf
+    # Corr is below, num is above -> next
+    # Corr is below, num is below -> Minrad
+    #
+
+
+    function CorrelationLengthAnalysis(BinMidpointRadius::Vector{Float64}, CorrelationValuesMean::Matrix{Float64}, NumPartBin::Matrix{Int64}, MinPartInBin::Int64,
+         NumIter::Int64, MinCorrVic::Float64, CorrValCut::Float64, NumBins::Int64, InfStandin::Float64)
+
+        CorrelationLength::Vector{Float64} = zeros(NumIter)
+        
+        for iIter in 1:NumIter
+            if CorrelationValuesMean[1,iIter] > MinCorrVic
+                for iBin in 2:NumBins
+                    if iBin > floor(Int64,NumBins/2) && NumPartBin[iBin,iIter] < MinPartInBin
+                        # Not enough particles are present in bin, and we are on the outer edge, corrlength is inf
+                        # Inf
+                        CorrelationLength[iIter] = InfStandin
+                        break
+                    end
+                    # Either there are enough particles in bin or the bin is close to the centre.
+                    if CorrelationValuesMean[iBin,iIter] < CorrValCut
+                        # Success!
+                        c::Float64 = ((BinMidpointRadius[iBin]-BinMidpointRadius[iBin-1])/(CorrelationValuesMean[iBin,iIter]-CorrelationValuesMean[iBin-1,iIter]))
+                        CorrelationLength[iIter] = BinMidpointRadius[iBin] + (CorrValCut-CorrelationValuesMean[iBin,iIter])*c
+                        break
+                    end
+                end
+            end
+        end
+        return collect(1:NumIter), CorrelationLength
+    end
+
+    @time BinMidpointRadius, CorrelationValuesMean, NumPartBin = AnalyzeCorrelationSimple(NumIter, NPart, ΔBins, NumBins, NumPartBases, 
+        PartHop,SimulatedCoords, SimulatedPolAng)
+
+    InfStandin::Float64 = R*2.0::Float64
+    MinPartInBin::Int64 = 15
+    MinCorrVic::Float64 = 0.5
+    CorrValCut::Float64 = 0.5
+
+    @time TimeVector, CorrelationLength = CorrelationLengthAnalysis(BinMidpointRadius, CorrelationValuesMean, NumPartBin, MinPartInBin, NumIter, MinCorrVic, CorrValCut, NumBins, InfStandin)
+
+    Plots.plot(TimeVector, CorrelationLength, size=(900,900))
+
+end
+
+
 
 if NormPlot
 
-    GLMakie.activate!(inline = false,focus_on_show=false)
+    #GLMakie.activate!(inline = false,focus_on_show=false)
     fig = Figure(size = (950,800))
     iPlot = Observable(1)
 
@@ -521,7 +395,7 @@ if QuivPolPlot
 end
 
 
-if true
+if ColPlot
     figCol = Figure(size = (1300,1100))
     iPlotCol = Observable(1)
 
@@ -719,4 +593,3 @@ end
 # α[] = 1.0
 
 # display(OrderFigMean)
-

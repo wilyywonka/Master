@@ -1,8 +1,8 @@
 &Parameters
-    NumPart = 10000
-    NumTimeSteps = 10000
-    SaveEvery = 7
-    MaxNeighbour = 8
+    NumPart = 40000
+    NumTimeSteps = 40000
+    SaveEvery = 10  
+    MaxNeighbour = 9
     k = 60.0
     kNonLin = 60.0
     kBoundary = 20.0
@@ -15,7 +15,7 @@
     IterMethod = "RK4"
     BaseDirName = "/SaveParams"
     InitFileName = "../../../HDF5Files/InitState.h5"
-    SaveFileName = "../../../HDF5Files/SaveFiles2.h5"
+    SaveFileName = "../../../HDF5Files/SaveFiles.h5"
     BoundaryMethod = "NoBoundary"
     ElasticityMethod = "LinearElasticity"
     PolarizationMethod = "MotionDrivenPolarization"

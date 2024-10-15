@@ -5,9 +5,9 @@ using HDF5
 
 # ---------------------------------------------------------------
 # SET PARAMETERS - SIMULATION -
-NPart::Int64 = 10000
-NSimulationIterations::Int64 = 10000
-SaveEverySimulation::Int64 = 7
+NPart::Int64 = 40000
+NSimulationIterations::Int64 = 40000
+SaveEverySimulation::Int64 = 20
 kSimulation::Float64 = 60.0
 kNonLin::Float64 = 60.0
 kBoundarySimulation::Float64 = 20.0
