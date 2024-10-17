@@ -40,26 +40,32 @@ Pkg.add("Plots")
 
 After installing the libraries the Julia programs should run without issues.
 
+`InitSetup.jl` is the script file containing the initialization algorithm, and can be modified using the values present in the top of the script, before running the full script.
+
+`Analysis.jl` is similar, and contains variables in the top, that deides what type of analysis is needed.
+
 ### Fortran
 
 The compillation and execution of the Fortran code is only currently tested using Linux Mint, and the following instructions may only be applicable to Debian-based OS's. The following steps should however be able to be replicated on most operating systems by modifying the steps.
 
-To install and compile the Fortran code, there are a few prerequisites. The program uses the library [h5fortran](https://github.com/geospace-code/h5fortran) to easily read and write to HDF5-files. The installation of this is well documented on their GitHub page.
+To install and compile the Fortran code, there are a few prerequisites. The program uses the library [h5fortran](https://github.com/geospace-code/h5fortran) to easily read and write to HDF5-files. The installation of this is well documented on their GitHub page. (NOTE: The h5fortran library, as well as the HDF5-functions (for which the h5fortran is a wrapper), must be compiled using the choosen compiler, as these are compiler specific.)
 
 To compile and use both this code and the h5fortran library, a few HDF5 libraries have to be installed and linked to as well, and the paths to these libraries needs to be set up. In the file located at `FortranXXXX/source/CMakeListsTemplate.txt` there are multiple places where the placeholder text `!FILL!` is written. Here the path to the relevant library must be written in place of the placeholder `!FILL!`, before renaming the file to `FortranXXXX/source/CMakeLists.txt`, where `FortranXXXX` indicates the three folders in the repository, Serial, Parallel and CUDA.
 (The template was made such that the machine specific paths were not set, as to avoid confusion.)
 
-After correcting these paths the program can be compiled. CMake is chosen as the compilation tool and the program can be compiled by executing
+After correcting these paths the program can be compiled. CMake is chosen as the compilation tool and the program can be compiled, with either the intel `ifx`, or the GNU `gfortran` compiler, by executing
 
 ```bash
-cd FortranXXXX/build
+cd FortranXXXX
 
-cmake ..
+cmake -B build -DCMAKE_Fortran_COMPILER="COMPILER" -DCMAKE_BUILD_TYPE=Release
+
+cd build
 
 make
 ```
 
-where again `FortranXXXX` is replaced by either of the three folder names. The program will be located in the `FortranXXXX/build/run` and can be run by executing
+where again `FortranXXXX` is replaced by either of the three folder names, and `"COMPILER"` is replaced with either  `ifx`, or `gfortran`. (NOTE: Remember that if one is using the `ifx`-compiler, the script `setvars.sh` included in Intel's OneAPI must be run to set the environment-variables required for the program to run). The program will be located in the `FortranXXXX/build/run` and can be run by executing
 
 ```bash
 cd run
@@ -83,7 +89,7 @@ The second can occur when only the number of snapshots is reduced between two ru
 
 This software was created by Wilhelm Sunde Lie as a part of the Master's Thesis in Physics at NTNU
 
-My thanks go to my supervisor Prof. Paul Gunnar Dommersnes for a lot of the physics related questions, and to my co-supervisor Prof. Ingve Simonsen for a lot of the programming/Fortran/compilation questions.
+My thanks go to my supervisor Prof. Paul Gunnar Dommersnes and to my co-supervisor Prof. Ingve Simonsen for providing helpful answers to all my questions!
 
 ## License
 This project is licensed under the [MIT License](https://choosealicense.com/licenses/mit/).

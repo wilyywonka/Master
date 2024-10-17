@@ -1,23 +1,42 @@
 include_directories(${CMAKE_BINARY_DIR}/source/)
 
-set(hdf5_i !FILL!)
-set(hdf5 !FILL!)
+if(CMAKE_Fortran_COMPILER_ID MATCHES Intel)
+	set(hdf5_i !FILL!)
+	set(hdf5 !FILL!)
+
+	set(hdf5_fortran_i !FILL!)
+	set(hdf5_fortran !FILL!)
+
+	set(hdf5hl_fortran_i !FILL!)
+	set(hdf5hl_fortran !FILL!)
+
+	set(h5fortran_i !FILL!)
+	set(h5fortran !FILL!)
+endif()
+
+if(CMAKE_Fortran_COMPILER_ID MATCHES GNU)
+	set(hdf5_i !FILL!)
+	set(hdf5 !FILL!)
+
+	set(hdf5_fortran_i !FILL!)
+	set(hdf5_fortran !FILL!)
+
+	set(hdf5hl_fortran_i !FILL!)
+	set(hdf5hl_fortran !FILL!)
+
+	set(h5fortran_i !FILL!)
+	set(h5fortran !FILL!)
+endif()
+
 include_directories(${hdf5_i})
 link_directories (${hdf5})
 
-set(hdf5_fortran_i !FILL!)
-set(hdf5_fortran !FILL!)
 include_directories(${hdf5_fortran_i})
 link_directories (${hdf5_fortran})
 
-set(hdf5hl_fortran_i !FILL!)
-set(hdf5hl_fortran !FILL!)
 include_directories(${hdf5hl_fortran_i})
 link_directories (${hdf5hl_fortran})
 
-
-set(h5fortran_i !FILL!)
-set(h5fortran !FILL!)
 include_directories(${h5fortran_i})
 link_directories (${h5fortran})
 
@@ -28,4 +47,9 @@ add_executable(ActiveSolidsSimulation
 	PrecisionMod.f90
 	)
 
-target_link_libraries(ActiveSolidsSimulation h5fortran hdf5 hdf5_fortran hdf5hl_fortran)
+if (CMAKE_Fortran_COMPILER_ID MATCHES Intel)
+	target_link_libraries(ActiveSolidsSimulation h5fortran hdf5 hdf5_fortran hdf5_hl_fortran)
+endif()
+if(CMAKE_Fortran_COMPILER_ID MATCHES GNU)
+	target_link_libraries(ActiveSolidsSimulation h5fortran hdf5 hdf5_fortran hdf5hl_fortran)
+endif()
