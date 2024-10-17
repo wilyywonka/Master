@@ -190,7 +190,6 @@ function CalcElasticRepulsion!(NeighbourCount::Matrix{Int64}, NeighbourIndices::
     #Loop over
     Threads.@threads for IdxCart in CountCoords
         NumInCell::Int64 = @view(NeighbourCount[IdxCart])[1]
-        # nested task error: MethodError: no method matching firstindex(::Base.Pairs{CartesianIndex{2}, Int64, CartesianIndices{2, Tuple{…}}, Matrix{Int64}})
         if NumInCell > 0
             # Defining vectors and local variables
             IdxCurrent::Vector{Int64} = [IdxCart[1],IdxCart[2]]
